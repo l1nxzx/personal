@@ -1,0 +1,19 @@
+{
+  "name": "website",
+  "private": true,
+  "description": "Convenience scripts for the client/ and server/ apps. Each app has its own package.json.",
+  "scripts": {
+    "install:all": "npm install && npm --prefix server install && npm --prefix client install",
+    "dev": "concurrently -n server,client -c blue,green \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
+    "build": "npm --prefix server run build && npm --prefix client run build",
+    "test": "npm --prefix server test",
+    "lint": "npm --prefix server run lint && npm --prefix client run lint",
+    "typecheck": "npm --prefix server run typecheck && npm --prefix client run typecheck",
+    "format": "prettier --write \"{client,server}/**/*.{ts,tsx,js,json,css,html}\" \"shared/**/*.ts\" \"*.{json,yaml,md}\"",
+    "create-super-admin": "npm --prefix server run create-super-admin --"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "prettier": "^3.4.2"
+  }
+}

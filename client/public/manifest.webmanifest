@@ -1,0 +1,9 @@
+{
+  "name": "Notebook",
+  "short_name": "Notebook",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#121720",
+  "theme_color": "#121720",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

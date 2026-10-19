@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+*.log
+
+# Secrets
+.env
+.env.*
+!.env.example
+serviceAccountKey.json
+*-firebase-adminsdk-*.json
+
+.DS_Store
+.vscode/*
+!.vscode/extensions.json

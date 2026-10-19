@@ -1,0 +1,203 @@
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/400-italic.css';
+@import '@fontsource/ibm-plex-sans/500.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource-variable/source-serif-4/opsz.css';
+@import '@fontsource-variable/source-serif-4/opsz-italic.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Palette: a quiet room at night. Deep blue-charcoal ground, blue-grey surfaces one or two
+ * steps up, pale blue-grey ink, and a single muted steel-blue accent. Values are RGB triplets
+ * so Tailwind can apply opacity.
+ */
+:root {
+  color-scheme: dark;
+  --bg: 18 23 32; /* #121720 */
+  --surface: 22 28 39; /* sidebar, quiet panels */
+  --surface-2: 29 36 49; /* inputs, hover */
+  --raised: 33 41 56; /* dialogs, menus */
+  --line: 40 49 66;
+  --line-strong: 56 67 87;
+  --ink: 220 226 235;
+  --ink-muted: 156 167 185;
+  --ink-faint: 122 134 153;
+  --accent: 140 165 214; /* text / indicators */
+  --accent-strong: 76 103 152; /* filled buttons */
+  --accent-ink: 238 242 248;
+  --ok: 130 174 145;
+  --warn: 207 172 112;
+  --bad: 216 131 131;
+  /* Chart steps of the accent hue, validated for contrast and colour-blind separation. */
+  --chart-1: 108 147 220; /* #6c93dc received */
+  --chart-2: 61 94 168; /* #3d5ea8 pending */
+}
+
+:root.light {
+  color-scheme: light;
+  --bg: 242 244 247;
+  --surface: 234 237 242;
+  --surface-2: 226 230 237;
+  --raised: 249 250 251;
+  --line: 214 219 228;
+  --line-strong: 190 198 211;
+  --ink: 27 33 44;
+  --ink-muted: 80 91 108;
+  --ink-faint: 104 114 130;
+  --accent: 55 85 140;
+  --accent-strong: 58 88 145;
+  --accent-ink: 245 247 250;
+  --ok: 46 116 76;
+  --warn: 142 98 24;
+  --bad: 166 56 56;
+  --chart-1: 58 98 179; /* #3a62b3 */
+  --chart-2: 115 149 220; /* #7395dc */
+}
+
+@layer base {
+  html {
+    /* Keep the scrollbar's space reserved, so short and long pages lay out at the same width. */
+    scrollbar-gutter: stable;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-bg font-sans text-[15px] leading-6 text-ink antialiased;
+    font-feature-settings: 'kern', 'liga';
+  }
+  ::selection {
+    background: rgb(var(--accent) / 0.3);
+  }
+  :focus-visible {
+    outline: 2px solid rgb(var(--accent) / 0.8);
+    outline-offset: 2px;
+  }
+  /* Inputs at 16px on phones so iOS doesn't zoom on focus. */
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+  @media (min-width: 640px) {
+    input,
+    textarea,
+    select {
+      font-size: inherit;
+    }
+  }
+  input[type='date']::-webkit-calendar-picker-indicator {
+    filter: invert(0.7);
+    cursor: pointer;
+  }
+  :root.light input[type='date']::-webkit-calendar-picker-indicator {
+    filter: none;
+  }
+  button {
+    touch-action: manipulation;
+  }
+}
+
+@layer components {
+  /* Section label with a hairline running to the edge: structure without boxes. */
+  .section-label {
+    @apply flex items-center gap-3 text-2xs font-medium uppercase tracking-[0.12em] text-ink-faint;
+  }
+  .section-label::after {
+    content: '';
+    @apply h-px flex-1 bg-line;
+  }
+
+  .page-title {
+    @apply font-serif text-[1.625rem] font-medium leading-tight tracking-[-0.01em] text-ink;
+    font-variation-settings: 'opsz' 40;
+  }
+
+  /* Rendered Markdown (journal reading view, previews). */
+  .prose-entry {
+    @apply text-ink;
+    font-size: var(--entry-size, 1.1875rem);
+    line-height: 1.75;
+  }
+  .prose-entry > * + * {
+    margin-top: 0.9em;
+  }
+  .prose-entry h1,
+  .prose-entry h2,
+  .prose-entry h3 {
+    @apply font-serif font-semibold leading-snug;
+    margin-top: 1.6em;
+  }
+  .prose-entry h1 {
+    font-size: 1.45em;
+  }
+  .prose-entry h2 {
+    font-size: 1.25em;
+  }
+  .prose-entry h3 {
+    font-size: 1.08em;
+  }
+  .prose-entry a {
+    @apply text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent;
+  }
+  .prose-entry blockquote {
+    @apply border-l-2 border-accent/50 pl-4 font-serif italic text-ink-muted;
+  }
+  .prose-entry ul {
+    @apply list-disc pl-6;
+  }
+  .prose-entry ol {
+    @apply list-decimal pl-6;
+  }
+  .prose-entry li + li {
+    margin-top: 0.25em;
+  }
+  .prose-entry li::marker {
+    @apply text-ink-faint;
+  }
+  .prose-entry ul.contains-task-list {
+    @apply list-none pl-1;
+  }
+  .prose-entry input[type='checkbox'] {
+    @apply mr-2 align-middle accent-[rgb(var(--accent-strong))];
+  }
+  .prose-entry code {
+    @apply rounded-sm bg-surface-2 px-1 py-0.5 font-mono text-[0.85em];
+  }
+  .prose-entry pre {
+    @apply overflow-x-auto rounded bg-surface p-3 text-sm;
+  }
+  .prose-entry pre code {
+    @apply bg-transparent p-0;
+  }
+  .prose-entry hr {
+    @apply my-8 border-line;
+  }
+  .prose-entry table {
+    @apply block overflow-x-auto text-sm;
+  }
+  .prose-entry th,
+  .prose-entry td {
+    @apply border border-line px-2 py-1;
+  }
+  .prose-entry strong {
+    @apply font-semibold;
+  }
+}
+
+@layer utilities {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
