@@ -37,7 +37,8 @@ export function LinksPanel({ item: self, className }: { item: Ref | null; classN
       </div>
       {links.isSuccess && !items.length && (
         <p className="py-1.5 text-sm text-ink-faint">
-          Nothing linked yet. Connect notes, entries, books, projects or files that belong together.
+          Nothing linked yet. Connect notes, entries, books, projects, files or folders that belong
+          together.
         </p>
       )}
       <ul className="-mx-2">

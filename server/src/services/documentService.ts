@@ -1,20 +1,19 @@
-import type { Readable } from 'node:stream';
-import type {
-  DocumentFile,
-  FolderCount,
-  Page,
-  UpdateDocumentRequest,
-} from '../../../shared/types.js';
+import type { DocumentFile, Page, UpdateDocumentRequest } from '../../../shared/types.js';
 import * as documents from '../data/documentRepo.js';
+import * as folders from '../data/folderRepo.js';
 import * as links from '../data/linkRepo.js';
 import * as storage from '../data/storage.js';
 import { notFound } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
-import { buildSearchTerms, normalizeTags } from '../lib/text.js';
+import { matchesAll, normalizeTags, queryTokens } from '../lib/text.js';
 import { notifyChange, type Ctx } from './context.js';
 import { isImage, processDocumentImage } from './imageService.js';
+import { documentTerms as terms, ensureLibraryMigrated } from './libraryMigration.js';
 
-/** Shown inline in the browser. Everything else (including SVG and HTML) is download-only. */
+/**
+ * Shown inline in the browser. Everything else (including SVG and HTML) is download-only.
+ * Audio and video can't run script, so they are safe to play on this origin.
+ */
 const INLINE = new Set([
   'image/jpeg',
   'image/png',
@@ -23,6 +22,18 @@ const INLINE = new Set([
   'image/avif',
   'application/pdf',
   'text/plain',
+  'video/mp4',
+  'video/webm',
+  'video/ogg',
+  'video/quicktime',
+  'audio/mpeg',
+  'audio/mp4',
+  'audio/aac',
+  'audio/ogg',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/webm',
+  'audio/flac',
 ]);
 
 export const toDocument = (r: documents.DocumentRecord): DocumentFile => ({
@@ -30,7 +41,7 @@ export const toDocument = (r: documents.DocumentRecord): DocumentFile => ({
   name: r.name,
   mime: r.mime,
   size: r.size,
-  folder: r.folder,
+  folderId: r.folderId,
   tags: r.tags,
   favorite: r.favorite,
   hasThumb: !!r.thumbPath,
@@ -50,17 +61,22 @@ export function cleanName(name: string): string {
   return cleaned || 'file';
 }
 
-export const cleanFolder = (f: string | null | undefined) =>
-  f?.trim().replace(/\s+/g, ' ').slice(0, 60) || null;
-
-const terms = (d: Pick<documents.DocumentRecord, 'name' | 'folder' | 'tags'>) =>
-  buildSearchTerms(d.name.replace(/[._-]+/g, ' '), d.folder ?? '', d.tags.join(' '));
+/** 404s unless `folderId` is null (top level) or an existing folder. */
+export async function requireFolderOrRoot(uid: string, folderId: string | null): Promise<void> {
+  if (folderId && !(await folders.get(uid, folderId))) {
+    throw notFound('That folder no longer exists');
+  }
+}
 
 export async function uploadDocument(
   ctx: Ctx,
   file: { buffer: Buffer; originalname: string; mimetype: string },
-  opts: { folder?: string | null },
+  opts: { folderId?: string | null },
 ): Promise<DocumentFile> {
+  const folderId = opts.folderId || null;
+  // Checked before anything is stored, so a bad target never leaves orphaned bytes.
+  await requireFolderOrRoot(ctx.userId, folderId);
+
   const id = documents.newId(ctx.userId);
   const dir = `users/${ctx.userId}/documents/${id}`;
   let data = file.buffer;
@@ -78,14 +94,11 @@ export async function uploadDocument(
   await storage.uploadFile(storagePath, data, mime);
 
   const now = new Date().toISOString();
-  const base = {
-    name: cleanName(file.originalname),
-    folder: cleanFolder(opts.folder),
-    tags: [] as string[],
-  };
+  const base = { name: cleanName(file.originalname), tags: [] as string[] };
   const record: documents.DocumentRecord = {
     id,
     ...base,
+    folderId,
     mime,
     size: data.length,
     favorite: false,
@@ -114,32 +127,52 @@ export async function getDocument(ctx: Ctx, id: string): Promise<DocumentFile> {
   return toDocument(r);
 }
 
+const newestFirst = (a: documents.DocumentRecord, b: documents.DocumentRecord) =>
+  b.createdAt.localeCompare(a.createdAt);
+
+/**
+ * - `folderId`: everything directly in that folder (`root` = top level), unpaginated.
+ * - `q`: files anywhere whose name or tags match every word.
+ * - `favorite` / `tag`: those files, anywhere.
+ * - nothing: every file, newest first, paginated ("Recent").
+ */
 export async function listDocuments(
   ctx: Ctx,
-  opts: { folder?: string; favorite?: boolean; tag?: string; limit: number; cursor?: string },
+  opts: {
+    folderId?: string;
+    q?: string;
+    favorite?: boolean;
+    tag?: string;
+    limit: number;
+    cursor?: string;
+  },
 ): Promise<Page<DocumentFile>> {
-  const folder = cleanFolder(opts.folder);
-  if (!folder && !opts.favorite && !opts.tag) {
-    const page = await documents.list(ctx.userId, opts.limit, opts.cursor);
+  const uid = ctx.userId;
+  let records: documents.DocumentRecord[];
+  if (opts.q !== undefined) {
+    const tokens = queryTokens(opts.q);
+    records = tokens.length
+      ? (await documents.search(uid, tokens[0]!, 300)).filter((r) =>
+          matchesAll(r.searchTerms, tokens),
+        )
+      : [];
+  } else if (opts.folderId) {
+    await ensureLibraryMigrated(uid);
+    const folderId = opts.folderId === 'root' ? null : opts.folderId;
+    await requireFolderOrRoot(uid, folderId);
+    records = await documents.listWhere(uid, 'folderId', folderId);
+  } else if (opts.favorite || opts.tag) {
+    records = opts.favorite
+      ? await documents.listWhere(uid, 'favorite', true)
+      : await documents.listWhere(uid, 'tags', opts.tag!);
+    records = records.filter(
+      (r) => (!opts.favorite || r.favorite) && (!opts.tag || r.tags.includes(opts.tag)),
+    );
+  } else {
+    const page = await documents.list(uid, opts.limit, opts.cursor);
     return { items: page.items.map(toDocument), nextCursor: page.nextCursor };
   }
-  const records = folder
-    ? await documents.listWhere(ctx.userId, 'folder', folder)
-    : opts.favorite
-      ? await documents.listWhere(ctx.userId, 'favorite', true)
-      : await documents.listWhere(ctx.userId, 'tags', opts.tag!);
-  const items = records
-    .filter((r) => (!opts.favorite || r.favorite) && (!opts.tag || r.tags.includes(opts.tag)))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .map(toDocument);
-  return { items, nextCursor: null };
-}
-
-export async function listFolders(ctx: Ctx): Promise<FolderCount[]> {
-  return Object.entries(await documents.folderCounts(ctx.userId))
-    .filter(([, n]) => n > 0)
-    .map(([folder, count]) => ({ folder, count }))
-    .sort((a, b) => a.folder.localeCompare(b.folder));
+  return { items: records.sort(newestFirst).map(toDocument), nextCursor: null };
 }
 
 export async function updateDocument(
@@ -149,9 +182,10 @@ export async function updateDocument(
 ): Promise<DocumentFile> {
   const current = await documents.get(ctx.userId, id);
   if (!current) throw notFound('This file no longer exists');
+  if (input.folderId !== undefined) await requireFolderOrRoot(ctx.userId, input.folderId);
   const next = {
     name: input.name !== undefined ? cleanName(input.name) : current.name,
-    folder: input.folder !== undefined ? cleanFolder(input.folder) : current.folder,
+    folderId: input.folderId !== undefined ? input.folderId : current.folderId,
     tags: input.tags ? normalizeTags(input.tags) : current.tags,
     favorite: input.favorite ?? current.favorite,
   };
@@ -165,14 +199,23 @@ export async function updateDocument(
   return toDocument(saved);
 }
 
-export async function deleteDocument(ctx: Ctx, id: string): Promise<void> {
-  const removed = await documents.remove(ctx.userId, id);
-  if (!removed) throw notFound('This file no longer exists');
+/**
+ * Deletes one file: its record, stored bytes and links. Returns false if it was already gone.
+ * The record goes first, so a storage hiccup can leave orphaned bytes but never a broken file.
+ */
+export async function removeStoredDocument(uid: string, id: string): Promise<boolean> {
+  const removed = await documents.remove(uid, id);
+  if (!removed) return false;
   await Promise.all([
     storage.deleteFile(removed.storagePath),
     removed.thumbPath ? storage.deleteFile(removed.thumbPath) : null,
-    links.removeAllFor(ctx.userId, `document:${id}`),
+    links.removeAllFor(uid, `document:${id}`),
   ]);
+  return true;
+}
+
+export async function deleteDocument(ctx: Ctx, id: string): Promise<void> {
+  if (!(await removeStoredDocument(ctx.userId, id))) throw notFound('This file no longer exists');
   notifyChange(ctx, 'document', id);
 }
 
@@ -181,12 +224,13 @@ export async function openDocument(
   ctx: Ctx,
   id: string,
   which: 'file' | 'thumb',
-): Promise<{ stream: Readable; mime: string; name: string; inline: boolean }> {
+  range?: { start: number; end?: number },
+): Promise<storage.StoredFile & { mime: string; name: string; inline: boolean }> {
   const r = await documents.get(ctx.userId, id);
   const path = which === 'thumb' ? r?.thumbPath : r?.storagePath;
   if (!r || !path) throw notFound('This file no longer exists');
-  const found = await storage.openFile(path);
+  const found = await storage.openFile(path, range);
   if (!found) throw notFound('This file is missing from storage');
   const mime = which === 'thumb' ? 'image/webp' : r.mime;
-  return { stream: found.stream, mime, name: r.name, inline: INLINE.has(mime) };
+  return { ...found, mime, name: r.name, inline: INLINE.has(mime) };
 }

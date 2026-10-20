@@ -44,6 +44,7 @@ const searchQuery = z.object({
             'book',
             'project',
             'document',
+            'folder',
             'income',
             'expense',
             'moneyIdea',

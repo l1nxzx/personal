@@ -3,6 +3,7 @@ import {
   bookRepo,
   documentRepo,
   entryRepo,
+  folderRepo,
   inboxRepo,
   incomeRepo,
   linkRepo,
@@ -28,6 +29,7 @@ vi.mock('../src/data/linkRepo.js', () => linkRepo);
 vi.mock('../src/data/bookRepo.js', () => bookRepo);
 vi.mock('../src/data/projectRepo.js', () => projectRepo);
 vi.mock('../src/data/documentRepo.js', () => documentRepo);
+vi.mock('../src/data/folderRepo.js', () => folderRepo);
 vi.mock('../src/data/incomeRepo.js', () => incomeRepo);
 vi.mock('../src/data/versionRepo.js', () => versionRepo);
 vi.mock('../src/data/moneyIdeaRepo.js', () => moneyIdeaRepo);

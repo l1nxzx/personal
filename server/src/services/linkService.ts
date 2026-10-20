@@ -2,12 +2,14 @@ import type { LinkedItem, Ref, RefType } from '../../../shared/types.js';
 import * as books from '../data/bookRepo.js';
 import * as documents from '../data/documentRepo.js';
 import * as entries from '../data/entryRepo.js';
+import * as folders from '../data/folderRepo.js';
 import * as links from '../data/linkRepo.js';
 import * as projects from '../data/projectRepo.js';
 import * as moneyIdeas from '../data/moneyIdeaRepo.js';
 import * as tasks from '../data/taskRepo.js';
 import { badRequest, notFound } from '../lib/errors.js';
 import { notifyChange, type Ctx } from './context.js';
+import { folderNames } from './folderService.js';
 
 export const refKey = (r: Ref) => `${r.type}:${r.id}`;
 const parseKey = (key: string): Ref => {
@@ -57,10 +59,28 @@ export async function describe(
         case 'project':
           for (const [id, p] of await projects.getMany(uid, ids)) put(type, id, p.name, p.status);
           break;
-        case 'document':
-          for (const [id, d] of await documents.getMany(uid, ids))
-            put(type, id, d.name, d.folder ?? '');
+        case 'document': {
+          const docs = await documents.getMany(uid, ids);
+          const names = await folderNames(
+            uid,
+            [...docs.values()].map((d) => d.folderId),
+          );
+          for (const [id, d] of docs)
+            put(type, id, d.name, (d.folderId && names.get(d.folderId)) || '');
           break;
+        }
+        case 'folder': {
+          const found = await folders.getMany(uid, ids);
+          const parents = await folderNames(
+            uid,
+            [...found.values()].map((f) => f.parentId),
+          );
+          for (const [id, f] of found) {
+            const parent = f.parentId && parents.get(f.parentId);
+            put(type, id, f.name, parent ? `Folder in ${parent}` : 'Folder');
+          }
+          break;
+        }
         case 'moneyIdea':
           for (const [id, i] of await moneyIdeas.getMany(uid, ids)) put(type, id, i.name, i.status);
           break;

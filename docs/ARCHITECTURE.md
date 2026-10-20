@@ -1,0 +1,69 @@
+# Architecture
+
+## Overview
+
+```
+Browser (React SPA) ──/api──▶ Express API ──firebase-admin──▶ Firestore + Cloud Storage
+        ▲                          │
+        └──── SSE /api/events ◀────┘   (Redis pub/sub when REDIS_URL is set)
+```
+
+- Dev: Vite (`client/vite.config.ts`, port 5173, strict) proxies `/api` to `localhost:4000`.
+- Prod: Netlify serves the static client and rewrites `/api/*` to the Render service (`netlify.toml`), so the browser sees one origin and cookies are first-party (`SameSite=Lax`).
+- `shared/types.d.ts` holds every API request/response type. Both apps `import type` from it by relative path (`tsconfig` of each app includes `../shared`). It contains no runtime code.
+
+## Server (`server/src`)
+
+| Dir                  | Role                                                                                                                                                           |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `index.ts`, `app.ts` | Boot, middleware order: request logger, helmet, CORS (`CLIENT_ORIGIN`, credentials), JSON (1 MB), cookies, `/api` rate limit (300/min), routes, error handlers |
+| `config/`            | `env.ts` (zod-validated env, throws on invalid), `firebase.ts` (lazy init; `db()`, `bucket()`)                                                                 |
+| `routes/`            | One file per feature, mounted in `routes/index.ts`. Validation with zod (`middleware/validate.ts`), then call a service                                        |
+| `services/`          | Business logic. Receives a `Ctx` (user id, client id) and calls `notifyChange` to push SSE events                                                              |
+| `data/`              | Firestore/Storage access only, one `*Repo.ts` per collection                                                                                                   |
+| `middleware/`        | `auth`, `validate`, `rateLimit` (Redis-backed if configured), `upload` (multer), `requestLogger` (pino), `errorHandler`                                        |
+| `permissions.ts`     | The only place roles/permissions are decided (`can`, `canModifyUser`, `requirePermission`)                                                                     |
+| `lib/`               | errors, tokens, cookies, password, text (search term building), logger, redis                                                                                  |
+
+Mounted API prefixes: `health auth users journal writing notes links tasks projects books documents income expenses subscriptions money-ideas versions reviews moments vault inbox me events`.
+
+### Auth
+
+- Access JWT 10 min (cookie path `/`); refresh JWT 14 days (cookie path `/api/auth`), single-use and rotated; its `jti` is a doc in `refreshTokens`.
+- Request auth reads no DB. A disabled user is locked out at next refresh. Login/register are rate limited (20 per 15 min).
+- Roles: `user`, `admin`, `superadmin`. Content is under `users/{uid}`, so nobody (admins included) can reach another user's content through the API. **There is no admin UI in the client**; user management exists only as API routes (`/api/users`).
+
+### Realtime
+
+`routes/events.routes.ts` streams SSE with a 25 s heartbeat. Services emit `ChangedEntity` events; `client/src/hooks/useRealtime.ts` maps them to TanStack Query invalidations. Without Redis, fan-out is in-process (single instance only).
+
+## Firestore model (everything under `users/{uid}/`)
+
+Collections: `journal`, `writing`, `notes`, `versions`, `tasks`, `projects`, `books`, `documents`, `income`, `expenses`, `subscriptions`, `moneyIdeas`, `reviews` (id = Monday of the week), `moments`, `vault`, `links`, `inbox`, `documentFolders`. Meta docs: `meta/{prefs,tags,topics,folders,library,income,expenses,vault}` (`meta/folders` holds the old name-based folder counts and is no longer written; `meta/library.foldersVersion = 2` marks the one-time folder migration as done). Global: `users`, `refreshTokens`.
+
+Patterns to keep:
+
+- **Running totals** (`meta/income`, `meta/expenses`, tag/topic counts) use `FieldValue.increment` inside the same transaction as the change.
+- **Journal ordering** uses `sortKey = date|createdAt|id` (one `orderBy`, cursor pagination). Lists `select()` away bodies.
+- **Search**: each doc stores `searchTerms` (accent-folded words + 3+ letter prefixes); one `array-contains` query per collection on the longest word, remaining words checked in memory.
+- **Conflicts**: entries carry `rev`; a stale save gets `409 EDIT_CONFLICT`. Only content changes bump `rev`.
+- **Versions**: snapshot written inside the entry update transaction (at most every 30 min while editing).
+- **Links**: docs `{from: "type:id", to: "type:id"}`, queried both ways. Library folders are `folder:id`; deleting a folder removes its links. Folders have no stored `searchTerms`: search matches folder names in memory from one read of the folder list.
+- **Files**: Storage at `users/{uid}/documents/{id}/file` (+ `thumb.webp`) and `users/{uid}/vault/{id}.bin`; only served through the API (with HTTP byte ranges, so video can seek).
+- **Library folders**: `documentFolders/{id}` = `{name, parentId}` (null = top level); each document has `folderId` (null = top level). Listing a folder is two equality queries (`parentId ==`, `folderId ==`); the client loads all folders once and builds the tree (breadcrumbs, move picker). Moving changes only these pointers, never Storage paths or ids. Recursive delete and usage counts use `folderId in [...]` in chunks of 30 (and a count aggregation). Sibling folder names are unique (case/accents ignored), nesting is capped at 20 levels, and moves into a folder's own subtree are refused, all checked in `folderService`.
+- **Folder migration** (`services/libraryMigration.ts`): files used to carry a free-text `folder` name. The first library request per user turns each distinct name into a top-level folder (deterministic id, so re-runs are no-ops), sets `folderId` on every file and rebuilds its search terms. Additive only: the old `folder` field is left in place.
+- Project task counts use a Firestore count aggregation (`GET /api/projects/task-counts`).
+
+## Client (`client/src`)
+
+- `main.tsx` provider order: QueryClient, Theme, Router, Toast, Confirm, Auth, Vault, UI, then `App`.
+- `App.tsx`: routes; less-used pages are `lazy()`. `RequireUser`/`GuestOnly` guard auth. `AppShell` wraps signed-in pages (sidebar, mobile nav, capture/search dialogs, task detail host) and holds the `Suspense` boundary so the shell stays during page loads.
+- `features/`: `capture entries home inbox library links me money projects reviews search tasks timeline vault`. Each holds its pages, API hooks (`api.ts`) and parts.
+- `lib/apiFetch.ts`: the only fetch wrapper (JSON/FormData/raw bytes, silent single refresh on 401, `ApiError`, `X-Client-Id`).
+- `lib/keys.ts`: query keys; other keys are defined next to their hooks (e.g. `projects/api.ts`). Invalidate consistently when a mutation touches related data.
+- Drafts: the editor mirrors text to `localStorage` (via `lib/storage.ts`, never throws) so closed tabs and offline edits recover. **Vault content is never stored locally.**
+- Routes: `/`, `/inbox`, `/journal(/:id)`, `/writing(/:id)`, `/thinking`, `/reviews`, `/timeline`, `/ideas(/:id)`, `/money`, `/money/expenses`, `/money/ideas(/:id)`, `/tasks`, `/tasks/{upcoming,all,done,projects}`, `/tasks/projects/:id`, `/library`, `/library/documents` (query: `folder`, `view=recent|starred`, `q`, `doc`), `/library/books/:id`, `/vault`, `/settings`. Note that tasks and projects live under `/tasks` even though the section is named "Projects & Tasks".
+
+## Tests
+
+`server/test/*.test.ts` run with vitest + supertest against the real Express app with the data layer replaced by in-memory fakes (`memory.ts`, `memory3.ts`, mocked in `setup.ts`). No client tests exist.

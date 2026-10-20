@@ -45,7 +45,17 @@ reviewRoutes.put(
 );
 
 const refSchema = z.object({
-  type: z.enum(['journal', 'writing', 'note', 'book', 'project', 'document', 'task', 'moneyIdea']),
+  type: z.enum([
+    'journal',
+    'writing',
+    'note',
+    'book',
+    'project',
+    'document',
+    'folder',
+    'task',
+    'moneyIdea',
+  ]),
   id: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
 });
 const momentFields = {

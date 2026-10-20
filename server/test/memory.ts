@@ -12,6 +12,7 @@ import type {
 import { conflict } from '../src/lib/errors.js';
 import type { BookRecord } from '../src/data/bookRepo.js';
 import type { DocumentRecord } from '../src/data/documentRepo.js';
+import type { FolderRecord } from '../src/data/folderRepo.js';
 import type { EntryRecord, EntrySummaryRecord, UpdateResult } from '../src/data/entryRepo.js';
 import type { ExpenseRecord, SubscriptionRecord } from '../src/data/expenseRepo.js';
 import type { MomentRecord } from '../src/data/momentRepo.js';
@@ -39,7 +40,8 @@ const stores = {
   books: new Map<string, Map<string, BookRecord>>(),
   projects: new Map<string, Map<string, ProjectRecord>>(),
   documents: new Map<string, Map<string, DocumentRecord>>(),
-  folders: new Map<string, Record<string, number>>(),
+  folders: new Map<string, Map<string, FolderRecord>>(),
+  libraryMigrated: new Set<string>(),
   income: new Map<string, Map<string, IncomeRecord>>(),
   incomeSummary: new Map<string, IncomeSummary>(),
   files: new Map<string, { data: Buffer; contentType: string }>(),
@@ -501,12 +503,16 @@ export const projectRepo = {
 // ---------------------------------------------------------------- documents
 const docs = (uid: string) => bucket(stores.documents, uid);
 
-function folderDelta(uid: string, before: string | null, after: string | null) {
-  if (before === after) return;
-  const counts = stores.folders.get(uid) ?? {};
-  if (before) counts[before] = (counts[before] ?? 0) - 1;
-  if (after) counts[after] = (counts[after] ?? 0) + 1;
-  stores.folders.set(uid, counts);
+/** Like Firestore, a missing `folderId` field never equals anything (not even null). */
+const inFolder = (d: DocumentRecord, folderId: string | null) =>
+  d.folderId !== undefined && d.folderId === folderId;
+
+/** Stores a file the way it looked before folder documents: a `folder` name, no `folderId`. */
+export function seedLegacyDocument(
+  uid: string,
+  d: Omit<DocumentRecord, 'folderId'> & { folder: string | null },
+) {
+  docs(uid).set(d.id, clone(d) as unknown as DocumentRecord);
 }
 
 export const documentRepo = {
@@ -522,12 +528,10 @@ export const documentRepo = {
   },
   async create(uid: string, d: DocumentRecord) {
     docs(uid).set(d.id, clone(d));
-    folderDelta(uid, null, d.folder);
   },
   async update(uid: string, id: string, patch: Partial<DocumentRecord>) {
     const current = docs(uid).get(id);
     if (!current) return null;
-    if (patch.folder !== undefined) folderDelta(uid, current.folder, patch.folder);
     const next = { ...current, ...clone(patch), id };
     docs(uid).set(id, next);
     return clone(next);
@@ -536,8 +540,14 @@ export const documentRepo = {
     const current = docs(uid).get(id);
     if (!current) return null;
     docs(uid).delete(id);
-    folderDelta(uid, current.folder, null);
     return clone(current);
+  },
+  async setFolder(uid: string, ids: string[], folderId: string | null, updatedAt: string) {
+    for (const id of ids) {
+      const d = docs(uid).get(id);
+      if (!d) throw new Error(`NOT_FOUND: no document to update: ${id}`);
+      docs(uid).set(id, { ...d, folderId, updatedAt });
+    }
   },
   async list(uid: string, limit: number, cursor?: string) {
     const all = [...docs(uid).values()]
@@ -545,19 +555,95 @@ export const documentRepo = {
       .sort(byDesc((d) => d.createdAt));
     return page(all, limit, (d) => d.createdAt);
   },
-  async listWhere(uid: string, field: 'folder' | 'favorite' | 'tags', value: string | boolean) {
+  async listWhere(
+    uid: string,
+    field: 'folderId' | 'favorite' | 'tags',
+    value: string | boolean | null,
+  ) {
     return [...docs(uid).values()]
-      .filter((d) => (field === 'tags' ? d.tags.includes(value as string) : d[field] === value))
+      .filter((d) =>
+        field === 'tags'
+          ? d.tags.includes(value as string)
+          : field === 'folderId'
+            ? inFolder(d, value as string | null)
+            : d[field] === value,
+      )
       .map(clone);
   },
-  async folderCounts(uid: string) {
-    return { ...(stores.folders.get(uid) ?? {}) };
+  async listInFolders(uid: string, folderIds: string[]) {
+    return [...docs(uid).values()].filter((d) => folderIds.some((f) => inFolder(d, f))).map(clone);
+  },
+  async countInFolders(uid: string, folderIds: string[]) {
+    return [...docs(uid).values()].filter((d) => folderIds.some((f) => inFolder(d, f))).length;
+  },
+  async listUnplaced(uid: string) {
+    return [...docs(uid).values()]
+      .filter((d) => d.folderId === undefined)
+      .map((d) => ({
+        id: d.id,
+        name: d.name,
+        tags: [...d.tags],
+        legacyFolder: (d as unknown as { folder?: string | null }).folder ?? null,
+      }));
+  },
+  async placeMany(
+    uid: string,
+    updates: { id: string; folderId: string | null; searchTerms: string[] }[],
+  ) {
+    for (const { id, ...data } of updates) docs(uid).set(id, { ...docs(uid).get(id)!, ...data });
   },
   async search(uid: string, term: string, limit: number) {
     return [...docs(uid).values()]
       .filter((d) => d.searchTerms.includes(term))
       .slice(0, limit)
       .map(clone);
+  },
+};
+
+// ---------------------------------------------------------------- library folders
+const folderStore = (uid: string) => bucket(stores.folders, uid);
+
+export const folderRepo = {
+  newId,
+  async get(uid: string, id: string) {
+    const f = folderStore(uid).get(id);
+    return f ? clone(f) : null;
+  },
+  async getMany(uid: string, ids: string[]) {
+    return new Map(
+      ids
+        .filter((id) => folderStore(uid).has(id))
+        .map((id) => [id, clone(folderStore(uid).get(id)!)]),
+    );
+  },
+  async listAll(uid: string) {
+    return [...folderStore(uid).values()].map(clone);
+  },
+  async listChildren(uid: string, parentId: string | null) {
+    return [...folderStore(uid).values()].filter((f) => f.parentId === parentId).map(clone);
+  },
+  async create(uid: string, f: FolderRecord) {
+    if (folderStore(uid).has(f.id)) throw new Error('ALREADY_EXISTS');
+    folderStore(uid).set(f.id, clone(f));
+  },
+  async putMany(uid: string, list: FolderRecord[]) {
+    for (const f of list) folderStore(uid).set(f.id, clone(f));
+  },
+  async update(uid: string, id: string, patch: Partial<Omit<FolderRecord, 'id'>>) {
+    const current = folderStore(uid).get(id);
+    if (!current) return null;
+    const next = { ...current, ...clone(patch), id };
+    folderStore(uid).set(id, next);
+    return clone(next);
+  },
+  async removeMany(uid: string, ids: string[]) {
+    for (const id of ids) folderStore(uid).delete(id);
+  },
+  async isMigrated(uid: string) {
+    return stores.libraryMigrated.has(uid);
+  },
+  async markMigrated(uid: string) {
+    stores.libraryMigrated.add(uid);
   },
 };
 
@@ -631,9 +717,16 @@ export const storage = {
   async uploadFile(path: string, data: Buffer, contentType: string) {
     stores.files.set(path, { data, contentType });
   },
-  async openFile(path: string) {
+  async openFile(path: string, range?: { start: number; end?: number }) {
     const f = stores.files.get(path);
-    return f ? { stream: Readable.from(f.data), contentType: f.contentType } : null;
+    if (!f) return null;
+    const size = f.data.length;
+    const r =
+      range && range.start < size
+        ? { start: range.start, end: Math.min(range.end ?? size - 1, size - 1) }
+        : null;
+    const data = r ? f.data.subarray(r.start, r.end + 1) : f.data;
+    return { stream: Readable.from(data), contentType: f.contentType, size, range: r };
   },
   async deleteFile(path: string) {
     stores.files.delete(path);

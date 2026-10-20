@@ -33,6 +33,8 @@ export function hrefFor(type: RefType | SearchType, id: string): string {
       return `/tasks/projects/${id}`;
     case 'document':
       return `/library/documents?doc=${id}`;
+    case 'folder':
+      return `/library/documents?folder=${id}`;
     case 'income':
       return `/money?entry=${id}`;
     case 'expense':
@@ -53,6 +55,7 @@ export const TYPE_LABEL: Record<RefType | SearchType, string> = {
   book: 'Book',
   project: 'Project',
   document: 'File',
+  folder: 'Folder',
   income: 'Income',
   expense: 'Expense',
   moneyIdea: 'Money idea',

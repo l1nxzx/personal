@@ -16,6 +16,7 @@ const LINKABLE = new Set<string>([
   'book',
   'project',
   'document',
+  'folder',
   'task',
   'moneyIdea',
 ]);
@@ -125,7 +126,7 @@ function Picker({ from, exclude, onDone }: { from: Ref; exclude: string[]; onDon
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Link to a note, entry, book, project or file…"
+          placeholder="Link to a note, entry, book, project, file or folder…"
           aria-label="Find something to link"
           autoComplete="off"
           className="h-14 min-w-0 flex-1 bg-transparent text-[1.0625rem] text-ink placeholder:text-ink-faint focus:outline-none focus-visible:outline-none sm:h-12"

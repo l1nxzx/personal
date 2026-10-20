@@ -8,7 +8,17 @@ import { ctxOf } from '../services/context.js';
 import * as linkService from '../services/linkService.js';
 
 const ref = z.object({
-  type: z.enum(['journal', 'writing', 'note', 'book', 'project', 'document', 'task', 'moneyIdea']),
+  type: z.enum([
+    'journal',
+    'writing',
+    'note',
+    'book',
+    'project',
+    'document',
+    'folder',
+    'task',
+    'moneyIdea',
+  ]),
   id: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
 });
 const pair = z.object({ from: ref, to: ref });

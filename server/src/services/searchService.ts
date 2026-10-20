@@ -2,6 +2,7 @@ import type { SearchResult, SearchType } from '../../../shared/types.js';
 import * as books from '../data/bookRepo.js';
 import * as documents from '../data/documentRepo.js';
 import * as expenses from '../data/expenseRepo.js';
+import { folderNames, searchFolders } from './folderService.js';
 import * as moments from '../data/momentRepo.js';
 import * as moneyIdeas from '../data/moneyIdeaRepo.js';
 import * as entries from '../data/entryRepo.js';
@@ -104,19 +105,44 @@ const FETCHERS: Record<SearchType, Fetcher> = {
       titleText: r.name,
       updatedAt: r.updatedAt,
     })),
-  document: async (uid, term) =>
-    (await documents.search(uid, term, PER_TYPE_FETCH)).map((r) => ({
+  document: async (uid, term) => {
+    const found = await documents.search(uid, term, PER_TYPE_FETCH);
+    const names = await folderNames(
+      uid,
+      found.map((r) => r.folderId),
+    );
+    return found.map((r) => ({
       result: {
         type: 'document',
         id: r.id,
         title: r.name,
-        snippet: r.folder ?? '',
+        snippet: (r.folderId && names.get(r.folderId)) || '',
         date: r.createdAt,
       },
       terms: r.searchTerms,
       titleText: r.name,
       updatedAt: r.updatedAt,
-    })),
+    }));
+  },
+  folder: async (uid, _term, tokens) => {
+    const found = await searchFolders(uid, tokens);
+    const parents = await folderNames(
+      uid,
+      found.map((f) => f.parentId),
+    );
+    return found.map((f) => ({
+      result: {
+        type: 'folder',
+        id: f.id,
+        title: f.name,
+        snippet: (f.parentId && parents.get(f.parentId)) || '',
+        date: f.updatedAt,
+      },
+      terms: buildSearchTerms(f.name),
+      titleText: f.name,
+      updatedAt: f.updatedAt,
+    }));
+  },
   moneyIdea: async (uid, term, tokens) =>
     (await moneyIdeas.search(uid, term, PER_TYPE_FETCH)).map((r) => ({
       result: {

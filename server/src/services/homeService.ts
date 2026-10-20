@@ -5,6 +5,7 @@ import * as entries from '../data/entryRepo.js';
 import * as projects from '../data/projectRepo.js';
 import { inboxCount } from './captureService.js';
 import type { Ctx } from './context.js';
+import { folderNames } from './folderService.js';
 import { recentEntries, toSummary } from './entryService.js';
 
 /** Recently added books, documents and projects: a short, quiet list. */
@@ -14,6 +15,10 @@ async function recentlyAdded(ctx: Ctx, limit: number): Promise<AddedItem[]> {
     documents.list(ctx.userId, limit),
     projects.listRecent(ctx.userId, limit),
   ]);
+  const names = await folderNames(
+    ctx.userId,
+    d.items.map((x) => x.folderId),
+  );
   return [
     ...b.map((x) => ({
       ref: { type: 'book' as const, id: x.id },
@@ -24,7 +29,7 @@ async function recentlyAdded(ctx: Ctx, limit: number): Promise<AddedItem[]> {
     ...d.items.map((x) => ({
       ref: { type: 'document' as const, id: x.id },
       title: x.name,
-      subtitle: x.folder ?? '',
+      subtitle: (x.folderId && names.get(x.folderId)) || '',
       createdAt: x.createdAt,
     })),
     ...p.map((x) => ({

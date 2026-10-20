@@ -1,4 +1,3 @@
-import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '../config/firebase.js';
 
 /** Metadata for uploaded files; the bytes live in Cloud Storage at `storagePath`. */
@@ -7,7 +6,8 @@ export interface DocumentRecord {
   name: string;
   mime: string;
   size: number;
-  folder: string | null;
+  /** Containing folder (`documentFolders/{id}`); null = top level. */
+  folderId: string | null;
   tags: string[];
   favorite: boolean;
   storagePath: string;
@@ -17,16 +17,27 @@ export interface DocumentRecord {
   searchTerms: string[];
 }
 
+/** A file stored before folders were documents: it has only the old `folder` name. */
+export interface UnplacedDocument {
+  id: string;
+  name: string;
+  tags: string[];
+  legacyFolder: string | null;
+}
+
 const userDoc = (uid: string) => db().collection('users').doc(uid);
 const col = (uid: string) => userDoc(uid).collection('documents');
-const foldersDoc = (uid: string) => userDoc(uid).collection('meta').doc('folders');
+
+const BATCH = 400;
+/** Firestore's limit on values in one `in` filter. */
+const IN_LIMIT = 30;
 
 const toRecord = (id: string, d: FirebaseFirestore.DocumentData): DocumentRecord => ({
   id,
   name: d.name,
   mime: d.mime,
   size: d.size,
-  folder: d.folder ?? null,
+  folderId: d.folderId ?? null,
   tags: d.tags ?? [],
   favorite: d.favorite ?? false,
   storagePath: d.storagePath,
@@ -36,22 +47,8 @@ const toRecord = (id: string, d: FirebaseFirestore.DocumentData): DocumentRecord
   searchTerms: d.searchTerms ?? [],
 });
 
-/** Anything that can queue a merge-set: a batch or a transaction. */
-type Writer = {
-  set(
-    ref: FirebaseFirestore.DocumentReference,
-    data: FirebaseFirestore.DocumentData,
-    options: FirebaseFirestore.SetOptions,
-  ): unknown;
-};
-
-function folderDelta(w: Writer, uid: string, before: string | null, after: string | null) {
-  if (before === after) return;
-  const delta: Record<string, FieldValue> = {};
-  if (before) delta[before] = FieldValue.increment(-1);
-  if (after) delta[after] = FieldValue.increment(1);
-  w.set(foldersDoc(uid), { counts: delta }, { merge: true });
-}
+const chunks = <T>(xs: T[], n: number) =>
+  Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
 
 export const newId = (uid: string) => col(uid).doc().id;
 
@@ -62,16 +59,13 @@ export async function get(uid: string, id: string): Promise<DocumentRecord | nul
 
 export async function getMany(uid: string, ids: string[]) {
   if (!ids.length) return new Map<string, DocumentRecord>();
-  const snaps = await db().getAll(...ids.map((id) => col(uid).doc(id)));
+  const snaps = await db().getAll(...[...new Set(ids)].map((id) => col(uid).doc(id)));
   return new Map(snaps.filter((s) => s.exists).map((s) => [s.id, toRecord(s.id, s.data()!)]));
 }
 
 export async function create(uid: string, doc: DocumentRecord): Promise<void> {
   const { id, ...data } = doc;
-  const batch = db().batch();
-  batch.create(col(uid).doc(id), data);
-  folderDelta(batch, uid, null, doc.folder);
-  await batch.commit();
+  await col(uid).doc(id).create(data);
 }
 
 export async function update(
@@ -87,7 +81,6 @@ export async function update(
     const data = { ...patch };
     delete data.id;
     tx.update(ref, data);
-    if (patch.folder !== undefined) folderDelta(tx, uid, current.folder, patch.folder);
     return { ...current, ...data };
   });
 }
@@ -97,11 +90,23 @@ export async function remove(uid: string, id: string): Promise<DocumentRecord | 
   return db().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) return null;
-    const current = toRecord(snap.id, snap.data()!);
     tx.delete(ref);
-    folderDelta(tx, uid, current.folder, null);
-    return current;
+    return toRecord(snap.id, snap.data()!);
   });
+}
+
+/** Moves existing files (the caller checked they exist) to `folderId`. Bytes are untouched. */
+export async function setFolder(
+  uid: string,
+  ids: string[],
+  folderId: string | null,
+  updatedAt: string,
+): Promise<void> {
+  for (const part of chunks(ids, BATCH)) {
+    const batch = db().batch();
+    for (const id of part) batch.update(col(uid).doc(id), { folderId, updatedAt });
+    await batch.commit();
+  }
 }
 
 /** Newest first, paginated by createdAt. */
@@ -115,21 +120,61 @@ export async function list(uid: string, limit: number, cursor?: string) {
   return { items, nextCursor: docs.length > limit ? (items.at(-1)?.createdAt ?? null) : null };
 }
 
-/** One equality filter (folder, favorite, tag); the caller sorts. */
+/** One equality filter (folder, favorite, tag); the caller sorts. `folderId: null` = top level. */
 export async function listWhere(
   uid: string,
-  field: 'folder' | 'favorite' | 'tags',
-  value: string | boolean,
+  field: 'folderId' | 'favorite' | 'tags',
+  value: string | boolean | null,
 ) {
   const snap = await col(uid)
     .where(field, field === 'tags' ? 'array-contains' : '==', value)
-    .limit(1000)
+    .limit(2000)
     .get();
   return snap.docs.map((d) => toRecord(d.id, d.data()));
 }
 
-export async function folderCounts(uid: string): Promise<Record<string, number>> {
-  return ((await foldersDoc(uid).get()).data()?.counts as Record<string, number>) ?? {};
+/** Every file directly inside any of `folderIds`. */
+export async function listInFolders(uid: string, folderIds: string[]) {
+  const out: DocumentRecord[] = [];
+  for (const part of chunks(folderIds, IN_LIMIT)) {
+    const snap = await col(uid).where('folderId', 'in', part).get();
+    out.push(...snap.docs.map((d) => toRecord(d.id, d.data())));
+  }
+  return out;
+}
+
+/** How many files sit directly inside any of `folderIds` (count aggregation, cheap). */
+export async function countInFolders(uid: string, folderIds: string[]): Promise<number> {
+  let total = 0;
+  for (const part of chunks(folderIds, IN_LIMIT)) {
+    total += (await col(uid).where('folderId', 'in', part).count().get()).data().count;
+  }
+  return total;
+}
+
+/** Files that predate folder documents (no `folderId` field at all). */
+export async function listUnplaced(uid: string): Promise<UnplacedDocument[]> {
+  const snap = await col(uid).select('name', 'tags', 'folder', 'folderId').get();
+  return snap.docs
+    .filter((d) => d.get('folderId') === undefined)
+    .map((d) => ({
+      id: d.id,
+      name: d.get('name') ?? 'file',
+      tags: d.get('tags') ?? [],
+      legacyFolder: d.get('folder') ?? null,
+    }));
+}
+
+/** Writes `folderId` (and fresh search terms) onto old files. The old `folder` field is kept. */
+export async function placeMany(
+  uid: string,
+  updates: { id: string; folderId: string | null; searchTerms: string[] }[],
+): Promise<void> {
+  for (const part of chunks(updates, BATCH)) {
+    const batch = db().batch();
+    for (const { id, ...data } of part) batch.update(col(uid).doc(id), data);
+    await batch.commit();
+  }
 }
 
 export async function search(uid: string, term: string, limit: number) {

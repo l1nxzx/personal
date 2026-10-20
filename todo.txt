@@ -1,7 +1,8 @@
-the /shared folder wont work in netlify and render as they only have access to either /client or /server, nothing in root. 
 
 say to check secret files for firebase json and explain to know difference between local development and production.
 
 in money, show longer time durations as default as its empty mostly now cuz im broke fuck now and i have to cope with what i made long time ago
 
 make tasks and projects be projects and tasks. more contrast on projects, more info to it, customizable. tasks are boring, no one wants to do tasks.
+
+be able to link folders to notes/journals/writings etc not just files

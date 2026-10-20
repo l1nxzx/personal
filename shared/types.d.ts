@@ -174,7 +174,15 @@ export interface TopicCount {
 
 // ---------------------------------------------------------------- Links
 export type RefType =
-  'journal' | 'writing' | 'note' | 'book' | 'project' | 'document' | 'task' | 'moneyIdea';
+  | 'journal'
+  | 'writing'
+  | 'note'
+  | 'book'
+  | 'project'
+  | 'document'
+  | 'folder'
+  | 'task'
+  | 'moneyIdea';
 
 export interface Ref {
   type: RefType;
@@ -311,23 +319,51 @@ export interface DocumentFile {
   name: string;
   mime: string;
   size: number;
-  folder: string | null;
+  /** The folder it sits in; null means the top level of the library. */
+  folderId: string | null;
   tags: string[];
   favorite: boolean;
   hasThumb: boolean;
-  /** Images and PDFs can be shown in the browser. */
+  /** Images, PDFs, plain text, audio and video can be shown in the browser. */
   previewable: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
 export type UpdateDocumentRequest = Partial<
-  Pick<DocumentFile, 'name' | 'folder' | 'tags' | 'favorite'>
+  Pick<DocumentFile, 'name' | 'folderId' | 'tags' | 'favorite'>
 >;
 
-export interface FolderCount {
-  folder: string;
-  count: number;
+/** A library folder. Folders nest through `parentId` (null = top level). */
+export interface DocumentFolder {
+  id: string;
+  name: string;
+  parentId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateFolderRequest {
+  name: string;
+  parentId: string | null;
+}
+export type UpdateFolderRequest = Partial<CreateFolderRequest>;
+
+/** Files and folders acted on together (bulk move / delete). */
+export interface LibrarySelection {
+  fileIds: string[];
+  folderIds: string[];
+}
+
+export interface MoveItemsRequest extends LibrarySelection {
+  /** Destination folder; null = top level. */
+  targetId: string | null;
+}
+
+/** What sits inside some folders, counted through every level below them. */
+export interface FolderUsage {
+  files: number;
+  folders: number;
 }
 
 // ---------------------------------------------------------------- Money: income
@@ -412,6 +448,7 @@ export type SearchType =
   | 'book'
   | 'project'
   | 'document'
+  | 'folder'
   | 'income'
   | 'expense'
   | 'moneyIdea'
