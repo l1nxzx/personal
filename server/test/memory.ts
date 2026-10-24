@@ -10,6 +10,7 @@ import type {
   VaultMeta,
 } from '../../shared/types.js';
 import { conflict } from '../src/lib/errors.js';
+import type { ActivityDayRecord, ActivityMetaRecord } from '../src/data/activityRepo.js';
 import type { BookRecord } from '../src/data/bookRepo.js';
 import type { DocumentRecord } from '../src/data/documentRepo.js';
 import type { FolderRecord } from '../src/data/folderRepo.js';
@@ -18,6 +19,7 @@ import type { ExpenseRecord, SubscriptionRecord } from '../src/data/expenseRepo.
 import type { MomentRecord } from '../src/data/momentRepo.js';
 import type { MoneyIdeaRecord } from '../src/data/moneyIdeaRepo.js';
 import type { ReviewRecord } from '../src/data/reviewRepo.js';
+import type { StatsMeta } from '../src/data/statsRepo.js';
 import type { VaultItemRecord } from '../src/data/vaultRepo.js';
 import type { VersionRecord } from '../src/data/versionRepo.js';
 import type { CaptureRecord } from '../src/data/inboxRepo.js';
@@ -54,6 +56,9 @@ const stores = {
   moments: new Map<string, Map<string, MomentRecord>>(),
   vaultMeta: new Map<string, VaultMeta>(),
   vaultItems: new Map<string, Map<string, VaultItemRecord>>(),
+  statsMeta: new Map<string, StatsMeta>(),
+  activityMeta: new Map<string, ActivityMetaRecord>(),
+  activityDays: new Map<string, Map<string, ActivityDayRecord>>(),
 };
 
 export function resetMemory() {

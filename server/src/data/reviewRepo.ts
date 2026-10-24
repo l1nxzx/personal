@@ -1,8 +1,9 @@
 import type { WeeklyReviewAnswers } from '../../../shared/types.js';
 import { db } from '../config/firebase.js';
+import type { TextStats } from '../lib/text.js';
 
 /** Weekly reviews, one document per week: users/{uid}/reviews/{weekStart}. */
-export interface ReviewRecord {
+export interface ReviewRecord extends Partial<TextStats> {
   weekStart: string;
   answers: WeeklyReviewAnswers;
   createdAt: string;

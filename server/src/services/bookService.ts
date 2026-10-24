@@ -12,6 +12,7 @@ import { notFound } from '../lib/errors.js';
 import { buildSearchTerms } from '../lib/text.js';
 import { notifyChange, type Ctx } from './context.js';
 import { createEntry } from './entryService.js';
+import { textStatsOf } from './textStats.js';
 
 export const toSummary = (r: books.BookSummaryRecord): BookSummary => ({
   id: r.id,
@@ -56,6 +57,7 @@ export async function createBook(ctx: Ctx, input: CreateBookRequest): Promise<Bo
     createdAt: now,
     updatedAt: now,
     searchTerms: terms(base),
+    ...textStatsOf('book', base),
   };
   await books.create(ctx.userId, record);
   notifyChange(ctx, 'book', record.id);
@@ -93,6 +95,7 @@ export async function updateBook(
   if (input.status === 'finished' && !next.finishedOn) next.finishedOn = day;
   next.quoteCount = next.quotes.length;
   next.searchTerms = terms(next);
+  Object.assign(next, textStatsOf('book', next));
   const { id: _id, ...patch } = next;
   await books.update(ctx.userId, id, patch);
   notifyChange(ctx, 'book', id);

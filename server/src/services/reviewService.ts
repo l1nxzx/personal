@@ -6,6 +6,7 @@ import * as reviews from '../data/reviewRepo.js';
 import * as tasks from '../data/taskRepo.js';
 import { badRequest } from '../lib/errors.js';
 import { notifyChange, type Ctx } from './context.js';
+import { textStatsOf } from './textStats.js';
 
 const EMPTY: WeeklyReviewAnswers = {
   happened: '',
@@ -105,6 +106,7 @@ export async function saveReview(
     answers: merged,
     createdAt: current?.createdAt ?? now,
     updatedAt: now,
+    ...textStatsOf('review', { answers: merged }),
   };
   await reviews.save(ctx.userId, record);
   return toReview(record);

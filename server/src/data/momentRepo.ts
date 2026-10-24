@@ -1,8 +1,9 @@
 import type { Ref } from '../../../shared/types.js';
 import { db } from '../config/firebase.js';
+import type { TextStats } from '../lib/text.js';
 
 /** Life timeline: moments chosen by hand, in users/{uid}/moments. */
-export interface MomentRecord {
+export interface MomentRecord extends Partial<TextStats> {
   id: string;
   date: string;
   title: string;

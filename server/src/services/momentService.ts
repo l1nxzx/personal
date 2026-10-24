@@ -4,6 +4,7 @@ import { notFound } from '../lib/errors.js';
 import { buildSearchTerms } from '../lib/text.js';
 import { notifyChange, type Ctx } from './context.js';
 import { describe } from './linkService.js';
+import { textStatsOf } from './textStats.js';
 
 export const toMoment = (r: moments.MomentRecord): Moment => ({
   id: r.id,
@@ -29,6 +30,7 @@ export async function addMoment(ctx: Ctx, input: CreateMomentRequest): Promise<M
     createdAt: now,
     updatedAt: now,
     searchTerms: buildSearchTerms(input.title, input.description ?? ''),
+    ...textStatsOf('moment', { description: input.description ?? '' }),
   };
   await moments.create(ctx.userId, record);
   notifyChange(ctx, 'moment', record.id);
@@ -44,6 +46,7 @@ export async function updateMoment(
   if (!current) throw notFound('This moment no longer exists');
   const next = { ...current, ...input, updatedAt: new Date().toISOString() };
   next.searchTerms = buildSearchTerms(next.title, next.description);
+  Object.assign(next, textStatsOf('moment', next));
   const { id: _id, ...patch } = next;
   await moments.update(ctx.userId, id, patch);
   notifyChange(ctx, 'moment', id);

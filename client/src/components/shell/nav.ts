@@ -6,6 +6,7 @@ import {
   ListChecks,
   LockKeyhole,
   Settings,
+  UserRound,
   Wallet,
   type LucideIcon,
 } from 'lucide-react';
@@ -43,6 +44,13 @@ export const NAV: NavItem[] = [
   { to: '/library', label: 'Library', title: 'Library', icon: Library },
   { to: '/vault', label: 'Vault', title: 'Private Vault', icon: LockKeyhole },
 ];
+
+export const PROFILE_NAV: NavItem = {
+  to: '/profile',
+  label: 'Profile',
+  title: 'Profile',
+  icon: UserRound,
+};
 
 export const SETTINGS_NAV: NavItem = {
   to: '/settings',

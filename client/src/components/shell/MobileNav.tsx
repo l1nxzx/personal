@@ -4,7 +4,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useUI } from '../../context/UIContext';
 import { cn } from '../../lib/cn';
 import { Dialog } from '../ui/Dialog';
-import { NAV, SETTINGS_NAV, isActive, type NavItem } from './nav';
+import { NAV, PROFILE_NAV, SETTINGS_NAV, isActive, type NavItem } from './nav';
 
 const PRIMARY = ['/', '/journal', '/tasks'];
 
@@ -36,7 +36,7 @@ export function MobileNav() {
   const [moreOpen, setMoreOpen] = useState(false);
 
   const [home, journal, tasks] = PRIMARY.map((p) => NAV.find((n) => n.to === p)!);
-  const secondary = [...NAV.filter((n) => !PRIMARY.includes(n.to)), SETTINGS_NAV];
+  const secondary = [...NAV.filter((n) => !PRIMARY.includes(n.to)), PROFILE_NAV, SETTINGS_NAV];
   const moreActive = secondary.some((n) => isActive(n, pathname));
 
   return (

@@ -25,6 +25,7 @@ const ReviewsPage = lazy(() => import('./features/reviews/ReviewsPage'));
 const TimelinePage = lazy(() => import('./features/timeline/TimelinePage'));
 const VaultPage = lazy(() => import('./features/vault/VaultPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const ProfilePage = lazy(() => import('./features/profile/ProfilePage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 function RequireUser() {
@@ -83,6 +84,7 @@ export default function App() {
             <Route path="library/books/:id" element={<BookPage />} />
 
             <Route path="vault" element={<VaultPage />} />
+            <Route path="profile" element={<ProfilePage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>

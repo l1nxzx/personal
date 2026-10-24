@@ -1,9 +1,14 @@
-/** In-memory doubles for the phase 3 data modules (money ideas, expenses, reviews, timeline, vault). */
+/**
+ * In-memory doubles for the phase 3 data modules (money ideas, expenses, reviews, timeline, vault)
+ * and for profile statistics (aggregations over the other stores, active time).
+ */
 import type { VaultMeta } from '../../shared/types.js';
+import type { ActivityDayRecord, ActivityMetaRecord } from '../src/data/activityRepo.js';
 import type { ExpenseRecord, SubscriptionRecord } from '../src/data/expenseRepo.js';
 import type { MomentRecord } from '../src/data/momentRepo.js';
 import type { MoneyIdeaRecord } from '../src/data/moneyIdeaRepo.js';
 import type { ReviewRecord } from '../src/data/reviewRepo.js';
+import type { ScannedDoc, StatCollection, StatsMeta } from '../src/data/statsRepo.js';
 import type { VaultItemRecord } from '../src/data/vaultRepo.js';
 import { bucket, byDesc, clone, newId, page, stores } from './memory.js';
 
@@ -242,3 +247,128 @@ export const vaultRepo = {
     return ids;
   },
 };
+
+// ---------------------------------------------------------------- profile statistics
+type Doc = Record<string, unknown>;
+
+/** The fake store behind each collection the statistics read. */
+function collectionOf(uid: string, c: StatCollection): Map<string, Doc> {
+  const stores_: Record<StatCollection, Map<string, unknown>> = {
+    journal: bucket(stores.entries, `${uid}/journal`),
+    writing: bucket(stores.entries, `${uid}/writing`),
+    notes: bucket(stores.entries, `${uid}/note`),
+    reviews: bucket(stores.reviews, uid),
+    moments: bucket(stores.moments, uid),
+    projects: bucket(stores.projects, uid),
+    tasks: bucket(stores.tasks, uid),
+    books: bucket(stores.books, uid),
+    documents: bucket(stores.documents, uid),
+    documentFolders: bucket(stores.folders, uid),
+    moneyIdeas: bucket(stores.moneyIdeas, uid),
+    income: bucket(stores.income, uid),
+    expenses: bucket(stores.expenses, uid),
+    subscriptions: bucket(stores.subscriptions, uid),
+    vault: bucket(stores.vaultItems, uid),
+  };
+  return stores_[c] as Map<string, Doc>;
+}
+
+const pick = (d: Doc, fields: string[]) =>
+  Object.fromEntries(fields.filter((f) => f in d).map((f) => [f, clone(d[f])]));
+
+export const statsRepo = {
+  async aggregate(uid: string, c: StatCollection, sumFields: string[] = []) {
+    const docs = [...collectionOf(uid, c).values()];
+    const sum = (f: string) =>
+      docs.reduce((s, d) => s + (typeof d[f] === 'number' ? (d[f] as number) : 0), 0);
+    return { count: docs.length, sums: Object.fromEntries(sumFields.map((f) => [f, sum(f)])) };
+  },
+  async countWhere(
+    uid: string,
+    c: StatCollection,
+    field: string,
+    op: '==' | '>',
+    value: string | number | boolean,
+  ) {
+    // Like Firestore, a missing field matches neither `==` nor `>`.
+    return [...collectionOf(uid, c).values()].filter((d) =>
+      !(field in d)
+        ? false
+        : op === '=='
+          ? d[field] === value
+          : (d[field] as number) > (value as number),
+    ).length;
+  },
+  async scan(
+    uid: string,
+    c: StatCollection,
+    fields: string[],
+    opts: { after?: string; limit: number },
+  ): Promise<ScannedDoc[]> {
+    return [...collectionOf(uid, c).entries()]
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .filter(([id]) => !opts.after || id > opts.after)
+      .slice(0, opts.limit)
+      .map(([id, d]) => ({ id, data: pick(d, fields) }));
+  },
+  async setFields(
+    uid: string,
+    c: StatCollection,
+    updates: { id: string; data: Record<string, number> }[],
+  ) {
+    const col = collectionOf(uid, c);
+    for (const u of updates) {
+      const d = col.get(u.id);
+      if (d) Object.assign(d, u.data);
+    }
+  },
+  async getMeta(uid: string) {
+    return { ...(stores.statsMeta.get(uid) ?? {}) };
+  },
+  async setMeta(uid: string, patch: StatsMeta) {
+    stores.statsMeta.set(uid, { ...(stores.statsMeta.get(uid) ?? {}), ...patch });
+  },
+};
+
+/** Test helper: put a document straight into a store, as if written before stats existed. */
+export function seedRaw(uid: string, c: StatCollection, id: string, doc: Doc) {
+  collectionOf(uid, c).set(id, clone(doc));
+}
+
+const daysOf = (uid: string) => bucket(stores.activityDays, uid);
+
+export const activityRepo = {
+  async getMeta(uid: string) {
+    const m = stores.activityMeta.get(uid);
+    return m ? clone(m) : null;
+  },
+  async record(
+    uid: string,
+    dates: string[],
+    build: (
+      meta: ActivityMetaRecord | null,
+      days: Map<string, ActivityDayRecord>,
+    ) => { meta: ActivityMetaRecord; days: ActivityDayRecord[] } | null,
+  ) {
+    const days = new Map(
+      dates.filter((d) => daysOf(uid).has(d)).map((d) => [d, clone(daysOf(uid).get(d)!)]),
+    );
+    const next = build(clone(stores.activityMeta.get(uid) ?? null), days);
+    if (!next) return;
+    stores.activityMeta.set(uid, clone(next.meta));
+    for (const d of next.days) daysOf(uid).set(d.date, clone(d));
+  },
+  async rebuild(
+    uid: string,
+    build: (meta: ActivityMetaRecord | null, days: ActivityDayRecord[]) => ActivityMetaRecord,
+  ) {
+    const meta = build(
+      clone(stores.activityMeta.get(uid) ?? null),
+      [...daysOf(uid).values()].map(clone),
+    );
+    stores.activityMeta.set(uid, clone(meta));
+  },
+};
+
+/** Test helper: the stored day records. */
+export const activityDays = (uid: string) => [...daysOf(uid).values()].map(clone);

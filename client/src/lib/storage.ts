@@ -24,3 +24,16 @@ export function removeKey(key: string): void {
     // ignore
   }
 }
+
+export function keysWithPrefix(prefix: string): string[] {
+  try {
+    const out: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(prefix)) out.push(key);
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}

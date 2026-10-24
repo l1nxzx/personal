@@ -1,7 +1,8 @@
 import type { Experiment, MoneyIdeaStatus } from '../../../shared/types.js';
 import { db } from '../config/firebase.js';
+import type { TextStats } from '../lib/text.js';
 
-export interface MoneyIdeaRecord {
+export interface MoneyIdeaRecord extends Partial<TextStats> {
   id: string;
   name: string;
   description: string;

@@ -7,12 +7,13 @@ import type {
   Source,
 } from '../../../shared/types.js';
 import { db } from '../config/firebase.js';
+import type { TextStats } from '../lib/text.js';
 
 /**
  * Journal entries, writings and knowledge notes live in users/{uid}/journal, /writing and /notes.
  * Separate collections keep every list a single-field query (no composite indexes).
  */
-export interface EntryRecord {
+export interface EntryRecord extends Partial<TextStats> {
   id: string;
   title: string;
   body: string;

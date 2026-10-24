@@ -736,3 +736,99 @@ export interface VaultItemInput {
   /** For updates: the updatedAt the edit was based on (detects edits from another device). */
   expectedUpdatedAt?: string;
 }
+
+// ---------------------------------------------------------------- Profile & lifetime statistics
+/** Things counted on the profile. Each item is counted once, in the collection it lives in. */
+export type ContentStatKey =
+  | 'journal'
+  | 'writing'
+  | 'note'
+  | 'review'
+  | 'moment'
+  | 'project'
+  | 'task'
+  | 'book'
+  | 'document'
+  | 'moneyIdea'
+  | 'income'
+  | 'expense'
+  | 'subscription'
+  | 'vault';
+
+export interface ContentStat {
+  key: ContentStatKey;
+  count: number;
+}
+
+/** Where written text is counted (titles and names never are). */
+export type WritingStatKey =
+  'journal' | 'writing' | 'note' | 'review' | 'moment' | 'book' | 'project' | 'moneyIdea';
+
+export interface WritingStat {
+  key: WritingStatKey;
+  words: number;
+  /** Characters, not counting spaces and line breaks. */
+  chars: number;
+  /** Items with any text in them. */
+  items: number;
+}
+
+export interface ActivityMonth {
+  /** `YYYY-MM`, by the browser's local date. */
+  month: string;
+  seconds: number;
+  days: number;
+}
+
+/** Time the site was open in a visible tab, recorded since this feature existed. */
+export interface ActivityStats {
+  totalSeconds: number;
+  /** Distinct local calendar days with any recorded time. */
+  days: number;
+  /** Stretches of use separated by at least 30 minutes without a visible tab. */
+  sessions: number;
+  longestSessionSeconds: number;
+  /** When recording started; null until the first minute is recorded. */
+  firstActiveAt: string | null;
+  lastActiveAt: string | null;
+  /** Newest first. */
+  months: ActivityMonth[];
+}
+
+export interface ProfileStats {
+  /** When the account was created. */
+  memberSince: string;
+  activity: ActivityStats;
+  content: {
+    items: ContentStat[];
+    /** Sum of `items` (every item once). */
+    total: number;
+    /** Knowledge notes by type; together they are the `note` count. */
+    noteTypes: { type: NoteType; count: number }[];
+    tasksDone: number;
+    documentBytes: number;
+    folders: number;
+  };
+  writing: {
+    words: number;
+    chars: number;
+    /** Journal entries, writings, notes, weekly reviews and moments with any text. */
+    entries: number;
+    items: WritingStat[];
+  };
+}
+
+/** One continuous stretch during which a tab of the site was visible. */
+export interface ActivityBeat {
+  /** Random id; a stretch sent more than once is counted once. */
+  id: string;
+  seconds: number;
+  /** How many seconds ago (by the browser's clock) the stretch ended. */
+  ago: number;
+  /** The browser's local date when the stretch ended. */
+  date: LocalDate;
+}
+
+export interface ActivityRequest {
+  beats: ActivityBeat[];
+}

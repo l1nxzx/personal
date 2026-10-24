@@ -1,7 +1,8 @@
 import type { BookStatus, Quote } from '../../../shared/types.js';
 import { db } from '../config/firebase.js';
+import type { TextStats } from '../lib/text.js';
 
-export interface BookRecord {
+export interface BookRecord extends Partial<TextStats> {
   id: string;
   title: string;
   author: string;

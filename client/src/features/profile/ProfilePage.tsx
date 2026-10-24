@@ -1,0 +1,384 @@
+import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
+import type {
+  ActivityStats,
+  ContentStatKey,
+  NoteType,
+  ProfileStats,
+  WritingStatKey,
+} from '../../../../shared/types';
+import { Page, PageHeader } from '../../components/shell/PageHeader';
+import { Button } from '../../components/ui/Button';
+import { Empty, ErrorNote, Loading } from '../../components/ui/misc';
+import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
+import { errorMessage } from '../../lib/apiFetch';
+import { daysBetween, formatRelativeDay, toLocalDate } from '../../lib/dates';
+import { formatSize } from '../library/api';
+import { useProfile, useRecount } from './api';
+
+const nf = new Intl.NumberFormat();
+const fmtDate = new Intl.DateTimeFormat(undefined, {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+});
+const fmtMonth = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' });
+const fmtTime = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
+
+const plural = (n: number, word: string) => `${nf.format(n)} ${word}${n === 1 ? '' : 's'}`;
+
+/** "41 h 12 min", "12 min", "under a minute". */
+export function formatDuration(seconds: number): string {
+  if (seconds <= 0) return '0 min';
+  if (seconds < 60) return 'under a minute';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return h ? `${nf.format(h)} h${m ? ` ${m} min` : ''}` : `${m} min`;
+}
+
+/** "2 years, 3 months", "5 days". */
+function timeSince(iso: string, now = new Date()): string {
+  const d = new Date(iso);
+  let months = (now.getFullYear() - d.getFullYear()) * 12 + now.getMonth() - d.getMonth();
+  if (now.getDate() < d.getDate()) months -= 1;
+  if (months < 1) {
+    const days = daysBetween(toLocalDate(d), toLocalDate(now));
+    return days < 1 ? 'since today' : plural(days, 'day');
+  }
+  const years = Math.floor(months / 12);
+  return [years && plural(years, 'year'), months % 12 && plural(months % 12, 'month')]
+    .filter(Boolean)
+    .join(', ');
+}
+
+/** "today at 21:10", "yesterday at 9:02", "12 Oct at 18:30". */
+function lastSeen(iso: string): string {
+  const d = new Date(iso);
+  const day = formatRelativeDay(toLocalDate(d));
+  const label = ['Today', 'Yesterday'].includes(day) ? day.toLowerCase() : day;
+  return `${label} at ${fmtTime.format(d)}`;
+}
+
+const formatBytes = (bytes: number) =>
+  bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(1)} GB` : formatSize(bytes);
+
+const CONTENT_LABELS: Record<ContentStatKey, string> = {
+  journal: 'Journal entries',
+  writing: 'Writings',
+  review: 'Weekly reviews',
+  moment: 'Timeline moments',
+  note: 'Notes',
+  project: 'Projects',
+  task: 'Tasks',
+  book: 'Books',
+  document: 'Files',
+  moneyIdea: 'Money-making ideas',
+  income: 'Income records',
+  expense: 'Expenses',
+  subscription: 'Subscriptions',
+  vault: 'Encrypted items',
+};
+
+/** Sections of the site, in the order of the navigation. */
+const CONTENT_GROUPS: { title: string; keys: ContentStatKey[] }[] = [
+  { title: 'Journal & Writing', keys: ['journal', 'writing', 'review', 'moment'] },
+  { title: 'Ideas & Knowledge', keys: ['note'] },
+  { title: 'Money & Work', keys: ['moneyIdea', 'income', 'expense', 'subscription'] },
+  { title: 'Projects & Tasks', keys: ['project', 'task'] },
+  { title: 'Library', keys: ['book', 'document'] },
+  { title: 'Private Vault', keys: ['vault'] },
+];
+
+const NOTE_TYPE_LABELS: Record<NoteType, [string, string]> = {
+  note: ['note', 'notes'],
+  question: ['question', 'questions'],
+  belief: ['belief', 'beliefs'],
+  quote: ['quote', 'quotes'],
+  decision: ['decision', 'decisions'],
+};
+
+const WRITING_LABELS: Record<WritingStatKey, string> = {
+  journal: 'Journal',
+  writing: 'Writing',
+  note: 'Ideas & notes',
+  review: 'Weekly reviews',
+  moment: 'Timeline moments',
+  book: 'Book notes',
+  project: 'Project descriptions',
+  moneyIdea: 'Money-making ideas',
+};
+
+export default function ProfilePage() {
+  const profile = useProfile();
+  return (
+    <Page width="default">
+      <PageHeader title="Profile" />
+      {profile.isPending && <Loading />}
+      {profile.isError && (
+        <ErrorNote onRetry={() => void profile.refetch()}>{errorMessage(profile.error)}</ErrorNote>
+      )}
+      {profile.data && (
+        <>
+          <Identity memberSince={profile.data.memberSince} />
+          <TimeSection a={profile.data.activity} />
+          <WritingSection w={profile.data.writing} />
+          <ContentSection c={profile.data.content} />
+          <MonthsSection a={profile.data.activity} />
+          <HowCounted />
+        </>
+      )}
+    </Page>
+  );
+}
+
+function Identity({ memberSince }: { memberSince: string }) {
+  const { user } = useAuth();
+  return (
+    <section aria-label="You" className="mt-3">
+      <p className="font-serif text-xl text-ink" style={{ fontVariationSettings: "'opsz' 30" }}>
+        {user?.displayName}
+      </p>
+      <p className="mt-1 text-sm text-ink-muted">
+        Here since {fmtDate.format(new Date(memberSince))}
+        <span className="text-ink-faint"> · {timeSince(memberSince)}</span>
+      </p>
+      <p className="mt-0.5 text-sm text-ink-faint">
+        {user?.email} ·{' '}
+        <Link to="/settings" className="underline underline-offset-2 hover:text-ink">
+          Change name
+        </Link>
+      </p>
+    </section>
+  );
+}
+
+function Figure({
+  label,
+  value,
+  note,
+  large,
+}: {
+  label: string;
+  value: ReactNode;
+  note?: ReactNode;
+  large?: boolean;
+}) {
+  return (
+    <div className={large ? 'col-span-2 sm:col-span-1' : undefined}>
+      <div className="text-2xs uppercase tracking-[0.12em] text-ink-faint">{label}</div>
+      {large ? (
+        <div
+          className="mt-1 font-serif text-[2rem] leading-none tabular-nums text-ink"
+          style={{ fontVariationSettings: "'opsz' 48" }}
+        >
+          {value}
+        </div>
+      ) : (
+        <div className="mt-1 text-lg tabular-nums text-ink">{value}</div>
+      )}
+      {note && <div className="mt-1.5 text-sm text-ink-muted">{note}</div>}
+    </div>
+  );
+}
+
+function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
+  return (
+    <section aria-labelledby={id} className="mt-12">
+      <h2 id={id} className="section-label mb-4">
+        {title}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
+function TimeSection({ a }: { a: ActivityStats }) {
+  const facts = [
+    a.lastActiveAt && `Last active ${lastSeen(a.lastActiveAt)}`,
+    a.longestSessionSeconds > 0 && `longest session ${formatDuration(a.longestSessionSeconds)}`,
+    a.days > 0 && `about ${formatDuration(a.totalSeconds / a.days)} on an active day`,
+  ].filter(Boolean);
+  const since = a.firstActiveAt && fmtDate.format(new Date(a.firstActiveAt));
+  return (
+    <Section id="profile-time" title="Time here">
+      <div className="grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-3">
+        <Figure large label="Active time" value={formatDuration(a.totalSeconds)} />
+        <Figure label="Days active" value={nf.format(a.days)} />
+        <Figure label="Sessions" value={nf.format(a.sessions)} />
+      </div>
+      {facts.length > 0 && (
+        <p className="mt-5 text-sm text-ink-muted">
+          {facts.join(' · ').replace(/^./, (ch) => ch.toUpperCase())}
+        </p>
+      )}
+      <p className="mt-2 text-sm text-ink-faint">
+        {since
+          ? `Counted while this site is open in a visible tab, since ${since}. Visits before that weren’t recorded.`
+          : 'Counted from now on, while this site is open in a visible tab.'}
+      </p>
+    </Section>
+  );
+}
+
+function WritingSection({ w }: { w: ProfileStats['writing'] }) {
+  const rows = w.items.filter((i) => i.items > 0 || i.words > 0);
+  return (
+    <Section id="profile-writing" title="Writing">
+      <div className="grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-3">
+        <Figure large label="Words written" value={nf.format(w.words)} />
+        <Figure label="Characters" value={nf.format(w.chars)} note="not counting spaces" />
+        <Figure label="Written entries" value={nf.format(w.entries)} />
+      </div>
+      {rows.length ? (
+        <table className="mt-6 w-full text-sm">
+          <thead>
+            <tr className="text-left text-2xs uppercase tracking-[0.12em] text-ink-faint">
+              <th className="pb-2 font-normal">Where</th>
+              <th className="pb-2 text-right font-normal">Words</th>
+              <th className="hidden pb-2 pl-4 text-right font-normal sm:table-cell">Characters</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line/70 border-t border-line/70">
+            {rows.map((r) => (
+              <tr key={r.key}>
+                <td className="py-2">
+                  <span className="text-ink-muted">{WRITING_LABELS[r.key]}</span>
+                  <span className="ml-2 text-2xs tabular-nums text-ink-faint">
+                    {plural(r.items, 'item')}
+                  </span>
+                </td>
+                <td className="py-2 text-right tabular-nums text-ink">{nf.format(r.words)}</td>
+                <td className="hidden py-2 pl-4 text-right tabular-nums text-ink-muted sm:table-cell">
+                  {nf.format(r.chars)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <Empty>Nothing written yet.</Empty>
+      )}
+    </Section>
+  );
+}
+
+function ContentSection({ c }: { c: ProfileStats['content'] }) {
+  const count = (key: ContentStatKey) => c.items.find((i) => i.key === key)?.count ?? 0;
+  const details: Partial<Record<ContentStatKey, string>> = {
+    note: c.noteTypes
+      .filter((t) => t.count > 0)
+      .map((t) => `${nf.format(t.count)} ${NOTE_TYPE_LABELS[t.type][t.count === 1 ? 0 : 1]}`)
+      .join(' · '),
+    task: c.tasksDone ? `${nf.format(c.tasksDone)} done` : '',
+    document: count('document')
+      ? `${formatBytes(c.documentBytes)}${c.folders ? ` in ${plural(c.folders, 'folder')}` : ''}`
+      : '',
+  };
+
+  return (
+    <Section id="profile-content" title="Everything kept here">
+      <p className="text-sm text-ink-muted">
+        <span className="text-lg tabular-nums text-ink">{nf.format(c.total)}</span>{' '}
+        {c.total === 1 ? 'item' : 'items'} in all
+      </p>
+      <div className="mt-6 grid grid-cols-1 gap-x-10 gap-y-7 sm:grid-cols-2">
+        {CONTENT_GROUPS.map((g) => (
+          <div key={g.title}>
+            <h3 className="mb-1 text-sm font-medium text-ink">{g.title}</h3>
+            <dl className="divide-y divide-line/70">
+              {g.keys.map((key) => (
+                <div key={key} className="py-2">
+                  <div className="flex items-baseline justify-between gap-4 text-sm">
+                    <dt className="text-ink-muted">{CONTENT_LABELS[key]}</dt>
+                    <dd className="tabular-nums text-ink">{nf.format(count(key))}</dd>
+                  </div>
+                  {details[key] && (
+                    <div className="mt-0.5 text-2xs text-ink-faint">{details[key]}</div>
+                  )}
+                </div>
+              ))}
+            </dl>
+          </div>
+        ))}
+      </div>
+    </Section>
+  );
+}
+
+const monthLabel = (month: string) =>
+  fmtMonth.format(new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1));
+
+function MonthsSection({ a }: { a: ActivityStats }) {
+  if (!a.months.length) return null;
+  const max = Math.max(...a.months.map((m) => m.seconds));
+  return (
+    <Section id="profile-months" title="By month">
+      <table className="w-full max-w-xl text-sm">
+        <tbody className="divide-y divide-line/70">
+          {a.months.map((m) => (
+            <tr key={m.month}>
+              <td className="w-[38%] py-2 text-ink-muted">{monthLabel(m.month)}</td>
+              <td className="py-2 pr-4" aria-hidden>
+                <div
+                  className="h-1 rounded-sm bg-chart-1/70"
+                  style={{ width: `${Math.max(2, (m.seconds / max) * 100)}%` }}
+                />
+              </td>
+              <td className="whitespace-nowrap py-2 text-right tabular-nums text-ink">
+                {formatDuration(m.seconds)}
+              </td>
+              <td className="whitespace-nowrap py-2 pl-4 text-right text-2xs tabular-nums text-ink-faint">
+                {plural(m.days, 'day')}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Section>
+  );
+}
+
+function HowCounted() {
+  const recount = useRecount();
+  const toast = useToast();
+  const run = () =>
+    recount.mutateAsync().then(
+      () => toast({ message: 'Counted again' }),
+      (err: unknown) => toast({ message: errorMessage(err), tone: 'error' }),
+    );
+  return (
+    <Section id="profile-how" title="How this is counted">
+      <ul className="max-w-[43rem] list-disc space-y-2 pl-5 text-sm text-ink-muted marker:text-ink-faint">
+        <li>
+          Active time is how long this site was open in a visible browser tab, whether or not you
+          were typing or clicking. It pauses when the tab is hidden, the window is minimised or you
+          switch to another app, and time in two tabs or on two devices at once counts once. It
+          shows how long the site was open, not how long anyone looked at it.
+        </li>
+        <li>
+          A session is a stretch of use without a break of 30 minutes or more. Days follow the date
+          on the device you were using.
+        </li>
+        <li>
+          Words and characters are counted in what you wrote: journal entries, writings, notes (with
+          beliefs and decisions), weekly reviews, timeline moments, book notes, project descriptions
+          and money-making ideas. Titles, tags, sources, quoted passages, earlier versions, code
+          blocks and formatting are left out. Files and the vault are never read.
+        </li>
+        <li>
+          Only durations, dates and counts are stored, in your own account. Nothing you read or type
+          is recorded for this, and nothing is sent anywhere else.
+        </li>
+      </ul>
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        <Button size="sm" onClick={() => void run()} busy={recount.isPending}>
+          Count again
+        </Button>
+        <span className="text-2xs text-ink-faint">
+          Recounts every item from scratch. The totals above are already kept up to date.
+        </span>
+      </div>
+    </Section>
+  );
+}

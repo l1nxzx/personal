@@ -4,13 +4,18 @@ import { asyncHandler } from '../lib/asyncHandler.js';
 import { authenticate } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { requirePermission } from '../permissions.js';
+import { recordActivity } from '../services/activityService.js';
 import { ctxOf } from '../services/context.js';
 import { getHome } from '../services/homeService.js';
 import { getPrefs, updatePrefs } from '../services/prefsService.js';
+import { getProfile, recount } from '../services/profileService.js';
 import { search } from '../services/searchService.js';
 import { localDate } from './schemas.js';
 
-/** Personal, cross-feature endpoints: home overview, preferences and universal search. */
+/**
+ * Personal, cross-feature endpoints: home overview, preferences, universal search, the profile
+ * with lifetime statistics, and active-time beats from open tabs.
+ */
 
 const prefsBody = z
   .object({
@@ -89,5 +94,51 @@ meRoutes.get(
   asyncHandler(async (req, res) => {
     const { q, types } = req.query as unknown as SearchQuery;
     res.json({ items: await search(ctxOf(req), q, types) });
+  }),
+);
+
+meRoutes.get(
+  '/profile',
+  asyncHandler(async (req, res) => {
+    res.json({ profile: await getProfile(ctxOf(req)) });
+  }),
+);
+
+/** Recounts stored text and rebuilds activity totals from the daily records (reconciliation). */
+meRoutes.post(
+  '/profile/recount',
+  asyncHandler(async (req, res) => {
+    res.json({ profile: await recount(ctxOf(req)) });
+  }),
+);
+
+// A tab sends a stretch at most every ~65 s of visible time; anything longer is malformed.
+const activityBody = z
+  .object({
+    beats: z
+      .array(
+        z
+          .object({
+            id: z.string().regex(/^[\w-]{8,64}$/),
+            seconds: z.number().int().min(1).max(120),
+            ago: z
+              .number()
+              .int()
+              .min(0)
+              .max(7 * 24 * 60 * 60),
+            date: localDate,
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(20),
+  })
+  .strict();
+
+meRoutes.post(
+  '/activity',
+  validate({ body: activityBody }),
+  asyncHandler(async (req, res) => {
+    res.json(await recordActivity(ctxOf(req), req.body.beats));
   }),
 );

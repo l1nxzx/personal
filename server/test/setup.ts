@@ -16,7 +16,15 @@ import {
   userRepo,
   versionRepo,
 } from './memory.js';
-import { expenseRepo, momentRepo, moneyIdeaRepo, reviewRepo, vaultRepo } from './memory3.js';
+import {
+  activityRepo,
+  expenseRepo,
+  momentRepo,
+  moneyIdeaRepo,
+  reviewRepo,
+  statsRepo,
+  vaultRepo,
+} from './memory3.js';
 
 // Replace the Firebase-backed data layer so tests need no credentials or network.
 vi.mock('../src/data/userRepo.js', () => userRepo);
@@ -37,6 +45,8 @@ vi.mock('../src/data/expenseRepo.js', () => expenseRepo);
 vi.mock('../src/data/reviewRepo.js', () => reviewRepo);
 vi.mock('../src/data/momentRepo.js', () => momentRepo);
 vi.mock('../src/data/vaultRepo.js', () => vaultRepo);
+vi.mock('../src/data/statsRepo.js', () => statsRepo);
+vi.mock('../src/data/activityRepo.js', () => activityRepo);
 vi.mock('../src/data/storage.js', () => storage);
 
 beforeEach(() => resetMemory());

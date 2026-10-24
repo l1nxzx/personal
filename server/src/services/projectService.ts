@@ -11,6 +11,7 @@ import * as tasks from '../data/taskRepo.js';
 import { notFound } from '../lib/errors.js';
 import { buildSearchTerms } from '../lib/text.js';
 import { notifyChange, type Ctx } from './context.js';
+import { textStatsOf } from './textStats.js';
 
 export const toProject = (r: projects.ProjectRecord): Project => ({
   id: r.id,
@@ -43,6 +44,7 @@ export async function createProject(ctx: Ctx, input: CreateProjectRequest): Prom
     createdAt: now,
     updatedAt: now,
     searchTerms: terms(base),
+    ...textStatsOf('project', base),
   };
   await projects.create(ctx.userId, record);
   notifyChange(ctx, 'project', record.id);
@@ -82,6 +84,7 @@ export async function updateProject(
   if (!current) throw notFound('This project no longer exists');
   const next = { ...current, ...input, updatedAt: new Date().toISOString() };
   next.searchTerms = terms(next);
+  Object.assign(next, textStatsOf('project', next));
   const { id: _id, ...patch } = next;
   await projects.update(ctx.userId, id, patch);
   notifyChange(ctx, 'project', id);

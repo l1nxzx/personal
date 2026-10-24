@@ -12,6 +12,7 @@ import { notFound } from '../lib/errors.js';
 import { buildSearchTerms } from '../lib/text.js';
 import { notifyChange, type Ctx } from './context.js';
 import { createProject } from './projectService.js';
+import { textStatsOf } from './textStats.js';
 
 export const toSummary = (r: ideas.MoneyIdeaSummaryRecord): MoneyIdeaSummary => ({
   id: r.id,
@@ -80,6 +81,7 @@ export async function createIdea(ctx: Ctx, input: CreateMoneyIdeaRequest): Promi
     createdAt: now,
     updatedAt: now,
     searchTerms: terms(base),
+    ...textStatsOf('moneyIdea', base),
   };
   await ideas.create(ctx.userId, record);
   notifyChange(ctx, 'moneyIdea', record.id);
@@ -117,6 +119,7 @@ export async function updateIdea(
   const next: ideas.MoneyIdeaRecord = { ...current, ...input, updatedAt: new Date().toISOString() };
   next.experimentCount = next.experiments.length;
   next.searchTerms = terms(next);
+  Object.assign(next, textStatsOf('moneyIdea', next));
   const { id: _id, ...patch } = next;
   await ideas.update(ctx.userId, id, patch);
   // Linking to a project also shows up in both items' "Linked" lists.

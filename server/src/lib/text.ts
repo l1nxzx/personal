@@ -88,8 +88,49 @@ export function excerpt(markdown: string, max = 220): string {
   return `${cut.slice(0, Math.max(cut.lastIndexOf(' '), max - 30))}…`;
 }
 
+const WORD = /[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu;
+
 export function wordCount(markdown: string): number {
-  return plainText(markdown).match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)?.length ?? 0;
+  return plainText(markdown).match(WORD)?.length ?? 0;
+}
+
+/** How much someone wrote in one item (profile statistics). Stored on each document. */
+export interface TextStats {
+  textWords: number;
+  textChars: number;
+}
+
+/**
+ * Markdown → only what was written: HTML tags, rules, table pipes, escapes and the rest of the
+ * Markdown syntax are dropped (code blocks too, as in `wordCount`).
+ */
+export function countableText(markdown: string): string {
+  return plainText(
+    markdown
+      .replace(/<\/?[a-zA-Z][^<>]*>/g, ' ')
+      .replace(/^\s{0,3}([-*_])(\s*\1){2,}\s*$/gm, ' ')
+      .replace(/^\s*\|?(\s*:?-+:?\s*\|)+\s*:?-*:?\s*$/gm, ' ')
+      .replace(/\|/g, ' ')
+      .replace(/\\([\\`*_{}[\]()#+\-.!>~|])/g, '$1'),
+  );
+}
+
+const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+/**
+ * Words and characters across several pieces of text. Words as in `wordCount`; characters are
+ * user-perceived characters (an emoji or an accented letter is one) not counting whitespace.
+ */
+export function textStats(parts: readonly string[]): TextStats {
+  let textWords = 0;
+  let textChars = 0;
+  for (const part of parts) {
+    if (!part) continue;
+    const text = countableText(part);
+    textWords += text.match(WORD)?.length ?? 0;
+    textChars += [...graphemes.segment(text.replace(/\s+/g, ''))].length;
+  }
+  return { textWords, textChars };
 }
 
 /** A short piece of `text` around the first occurrence of any token. */

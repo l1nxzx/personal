@@ -4,7 +4,7 @@ import { useUI } from '../../context/UIContext';
 import { cn } from '../../lib/cn';
 import { modKey } from '../../lib/hotkeys';
 import { Kbd } from '../ui/misc';
-import { NAV, SETTINGS_NAV, isActive, type NavItem } from './nav';
+import { NAV, PROFILE_NAV, SETTINGS_NAV, isActive, type NavItem } from './nav';
 
 function NavRow({ item, pathname }: { item: NavItem; pathname: string }) {
   const active = isActive(item, pathname);
@@ -72,7 +72,8 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="border-t border-line px-3 py-3">
+      <div className="space-y-0.5 border-t border-line px-3 py-3">
+        <NavRow item={PROFILE_NAV} pathname={pathname} />
         <NavRow item={SETTINGS_NAV} pathname={pathname} />
       </div>
     </aside>

@@ -1,10 +1,12 @@
 import { Suspense } from 'react';
 import { Outlet, useMatch } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { cn } from '../../lib/cn';
 import { Loading } from '../ui/misc';
 import { PAGE_FRAME } from './PageHeader';
 import { CaptureDialog } from '../../features/capture/CaptureDialog';
+import { useActivityTracking } from '../../features/profile/activityTracker';
 import { SearchDialog } from '../../features/search/SearchDialog';
 import { TaskDetailHost } from '../../features/tasks/TaskDetail';
 import { useRealtime } from '../../hooks/useRealtime';
@@ -15,6 +17,7 @@ import { Sidebar } from './Sidebar';
 /** Layout for signed-in pages: navigation, global shortcuts, Quick Capture and Search. */
 export function AppShell() {
   const { openCapture, openSearch, captureOpen, searchOpen } = useUI();
+  const { user } = useAuth();
   // Editors take the whole phone screen; no bottom bar competing with the keyboard.
   const journalEditor = useMatch('/journal/:id');
   const writingEditor = useMatch('/writing/:id');
@@ -22,6 +25,7 @@ export function AppShell() {
   const inEditor = !!(journalEditor || writingEditor || noteEditor);
 
   useRealtime(true);
+  useActivityTracking(user?.id);
 
   useKeydown((e) => {
     if (e.defaultPrevented) return;

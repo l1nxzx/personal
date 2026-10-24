@@ -1,7 +1,8 @@
 import type { Milestone, ProjectStatus } from '../../../shared/types.js';
 import { db } from '../config/firebase.js';
+import type { TextStats } from '../lib/text.js';
 
-export interface ProjectRecord {
+export interface ProjectRecord extends Partial<TextStats> {
   id: string;
   name: string;
   goal: string;

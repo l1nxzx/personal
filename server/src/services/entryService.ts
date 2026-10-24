@@ -19,6 +19,7 @@ import * as versions from '../data/versionRepo.js';
 import { AppError, badRequest, notFound } from '../lib/errors.js';
 import { buildSearchTerms, excerpt, normalizeTags, wordCount } from '../lib/text.js';
 import { notifyChange, type Ctx } from './context.js';
+import { textStatsOf } from './textStats.js';
 
 const journalSortKey = (date: string, createdAt: string, id: string) =>
   `${date}|${createdAt}|${id}`;
@@ -69,6 +70,7 @@ function cleanDecision(d: DecisionMeta): DecisionMeta {
 
 /** Fields derived from the content, recomputed whenever it changes. */
 function derived(
+  kind: EntryKind,
   r: Pick<entries.EntryRecord, 'title' | 'body' | 'tags' | 'topic' | 'sources' | 'perspectives'> & {
     decision?: DecisionMeta | null;
   },
@@ -77,6 +79,7 @@ function derived(
   return {
     excerpt: excerpt(r.body),
     wordCount: wordCount(r.body),
+    ...textStatsOf(kind, r),
     searchTerms: buildSearchTerms(
       r.title,
       r.body,
@@ -177,7 +180,7 @@ export async function createEntry(
     decided: false,
     monthDay: date ? date.slice(5) : isNote ? now.slice(5, 10) : null,
     lastSnapshotAt: null,
-    ...derived(base),
+    ...derived(kind, base),
   };
   await entries.create(ctx.userId, kind, record);
   notifyChange(ctx, kind, id);
@@ -272,7 +275,7 @@ async function updateEntryWith(
         }),
         ...flags,
         updatedAt: new Date().toISOString(),
-        ...derived({ ...next, decision }),
+        ...derived(kind, { ...next, decision }),
       };
     },
     contentChange,

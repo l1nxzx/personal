@@ -13,4 +13,5 @@ export const keys = {
   openTasks: ['tasks', 'open'] as const,
   doneTasks: ['tasks', 'done'] as const,
   search: (q: string) => ['search', q] as const,
+  profile: ['profile'] as const,
 };
