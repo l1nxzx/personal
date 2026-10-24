@@ -45,19 +45,23 @@ const userDoc = (uid: string) => db().collection('users').doc(uid);
 const col = (uid: string, c: StatCollection) => userDoc(uid).collection(c);
 const metaDoc = (uid: string) => userDoc(uid).collection('meta').doc('stats');
 
-/** Number of documents, plus the sum of each numeric field (documents without it add 0). */
+/**
+ * Number of documents, plus the sum of each numeric field (documents without it add 0).
+ * One aggregation per query: several sums in one query need a composite index over those
+ * fields, while a single sum is served by the field's automatic index.
+ */
 export async function aggregate(
   uid: string,
   c: StatCollection,
   sumFields: string[] = [],
 ): Promise<{ count: number; sums: Record<string, number> }> {
-  const spec: Record<string, AggregateFieldType> = { count: AggregateField.count() };
-  sumFields.forEach((f, i) => (spec[`s${i}`] = AggregateField.sum(f)));
-  const data = (await col(uid, c).aggregate(spec).get()).data();
-  return {
-    count: Number(data.count ?? 0),
-    sums: Object.fromEntries(sumFields.map((f, i) => [f, Number(data[`s${i}`] ?? 0)])),
-  };
+  const run = async (field: AggregateFieldType) =>
+    Number((await col(uid, c).aggregate({ v: field }).get()).data().v ?? 0);
+  const [count, ...sums] = await Promise.all([
+    run(AggregateField.count()),
+    ...sumFields.map((f) => run(AggregateField.sum(f))),
+  ]);
+  return { count: count!, sums: Object.fromEntries(sumFields.map((f, i) => [f, sums[i]!])) };
 }
 
 export async function countWhere(
