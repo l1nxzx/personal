@@ -104,6 +104,11 @@ export function useEntryEditor(
   const [conflict, setConflict] = useState<Entry | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(entry ? Date.parse(entry.updatedAt) : null);
+  /**
+   * Goes up when the text is replaced by one that didn't come from here (another device's
+   * edit), so the editor starts its undo history again rather than offer to undo that edit.
+   */
+  const [historyKey, setHistoryKey] = useState(0);
 
   const inFlight = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout>>();
@@ -312,6 +317,7 @@ export function useEntryEditor(
     if (remote.id !== idRef.current || remote.rev <= revRef.current || inFlight.current) return;
     if (!equal(fieldsRef.current, savedRef.current)) return; // local edits: the next save reports a conflict
     const f = fieldsOf(remote);
+    if (f.body !== fieldsRef.current.body) setHistoryKey((k) => k + 1);
     revRef.current = remote.rev;
     savedRef.current = f;
     fieldsRef.current = f;
@@ -326,6 +332,7 @@ export function useEntryEditor(
       savedRef.current = fieldsOf(conflict);
       setConflict(null);
       if (choice === 'theirs') {
+        if (conflict.body !== fieldsRef.current.body) setHistoryKey((k) => k + 1);
         fieldsRef.current = fieldsOf(conflict);
         setFieldsState(fieldsRef.current);
         removeKey(draftKey(kind, idRef.current));
@@ -384,6 +391,7 @@ export function useEntryEditor(
     id: idRef.current,
     fields,
     setFields,
+    historyKey,
     status,
     savedAt,
     errorText,

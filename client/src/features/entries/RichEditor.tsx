@@ -3,8 +3,11 @@ import { Marked } from 'marked';
 import { TableKit } from '@tiptap/extension-table';
 import { Placeholder } from '@tiptap/extensions';
 import { Markdown } from '@tiptap/markdown';
+import { closeHistory, isHistoryTransaction, redoDepth, undoDepth } from '@tiptap/pm/history';
+import { EditorState, Plugin, type Transaction } from '@tiptap/pm/state';
+import { AddMarkStep, AttrStep, RemoveMarkStep, ReplaceAroundStep } from '@tiptap/pm/transform';
 import type { Editor } from '@tiptap/react';
-import { EditorContent, useEditor } from '@tiptap/react';
+import { EditorContent, Extension, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { ExternalLink, FolderClosed, Link2, Paperclip, Unlink } from 'lucide-react';
 import {
@@ -20,7 +23,12 @@ import { parseAnchorUrl, type AnchorRef } from '../../lib/anchors';
 import { cn } from '../../lib/cn';
 import { hrefFor } from '../../lib/routes';
 import { useDocument, useFolders } from '../documents/api';
-import type { FormatAction, MarkdownEditorHandle } from './MarkdownEditor';
+import {
+  sameUndoState,
+  type FormatAction,
+  type MarkdownEditorHandle,
+  type UndoState,
+} from './MarkdownEditor';
 import { proseClass, type WritingFont } from './writingStyle';
 
 // Its own instance: the editor's Markdown support adds rules to the shared one.
@@ -65,6 +73,66 @@ function activeFormats(editor: Editor): Set<FormatAction> {
 const sameSet = (a: Set<string>, b: Set<string>) =>
   a.size === b.size && [...a].every((x) => b.has(x));
 
+/** Marks a transaction as an undo step of its own (toolbar formatting, links, a restore). */
+const OWN_STEP = 'ownUndoStep';
+
+/** Only formatting: marks added or removed, blocks changed or wrapped, a checkbox ticked. */
+const onlyFormatting = (tr: Transaction) =>
+  tr.steps.every(
+    (s) =>
+      s instanceof AddMarkStep ||
+      s instanceof RemoveMarkStep ||
+      s instanceof ReplaceAroundStep ||
+      s instanceof AttrStep,
+  );
+
+/**
+ * Undo takes back one action at a time. Typing in quick succession is undone together (the
+ * editor's own grouping), but formatting (from the toolbar or a shortcut such as Mod+B), a
+ * link, or a restored version is always a step of its own, never merged with the typing just
+ * before or after it. What the editor adds by itself after a mere click (the empty paragraph
+ * it keeps at the end) is not a step at all, so undo never seems to do nothing.
+ */
+const UndoSteps = Extension.create({
+  name: 'undoSteps',
+  addProseMirrorPlugins() {
+    let closeNext = false;
+    return [
+      new Plugin({
+        filterTransaction: (tr) => {
+          const root = tr.getMeta('appendedTransaction') as Transaction | undefined;
+          if (root) {
+            if (!root.docChanged) tr.setMeta('addToHistory', false);
+            return true;
+          }
+          if (!tr.docChanged || isHistoryTransaction(tr) || tr.getMeta('addToHistory') === false)
+            return true;
+          const own = !!tr.getMeta(OWN_STEP) || onlyFormatting(tr);
+          if (own || closeNext) closeHistory(tr);
+          closeNext = own;
+          return true;
+        },
+      }),
+    ];
+  },
+});
+
+/** Forgets every undo step (the plugins start afresh on the same text and selection). */
+function clearHistory(editor: Editor) {
+  const { state } = editor;
+  editor.view.updateState(
+    EditorState.create({ doc: state.doc, selection: state.selection, plugins: state.plugins }),
+  );
+}
+
+const undoStateOf = (editor: Editor): UndoState => ({
+  undo: undoDepth(editor.state) > 0,
+  redo: redoDepth(editor.state) > 0,
+});
+
+/** Markdown as the editor writes it, without the blank lines of its empty last paragraph. */
+const markdownOf = (editor: Editor) => editor.getMarkdown().replace(/\n+$/, '');
+
 /**
  * The formatted writing view: the text looks as it does when read (headings, lists, quotes,
  * words linked to files), while it is still stored as Markdown. Toolbar buttons show what is
@@ -84,6 +152,13 @@ const RichEditor = forwardRef<
     autoFocus?: boolean;
     /** Formatting at the selection changed (for the toolbar). */
     onActive?: (active: Set<FormatAction>) => void;
+    /** Whether there is anything to undo or redo changed. */
+    onHistory?: (state: UndoState) => void;
+    /**
+     * Changes when the text was replaced in a way that can't be undone (an edit from another
+     * device): the undo history starts again from there.
+     */
+    historyKey?: number;
     /** This text has something the editor can't show; switch to the plain editor. */
     onUnsupported: () => void;
   }
@@ -97,16 +172,31 @@ const RichEditor = forwardRef<
     minRows = 8,
     autoFocus,
     onActive,
+    onHistory,
+    historyKey = 0,
     onUnsupported,
   },
   ref,
 ) {
   const lastEmitted = useRef(value);
   const lastActive = useRef(new Set<FormatAction>());
-  const callbacks = useRef({ onChange, onActive, onUnsupported });
-  callbacks.current = { onChange, onActive, onUnsupported };
+  const lastUndo = useRef<UndoState>({ undo: false, redo: false });
+  const appliedKey = useRef(historyKey);
+  /**
+   * The text as it was given and as the editor writes it. Undoing back to it gives back the
+   * original text exactly, so undoing every change leaves nothing to save (the editor may
+   * write the same thing differently, `*` for `_` say).
+   */
+  const baseline = useRef({ given: value, written: '' });
+  const callbacks = useRef({ onChange, onActive, onHistory, onUnsupported });
+  callbacks.current = { onChange, onActive, onHistory, onUnsupported };
 
   const report = (editor: Editor) => {
+    const undo = undoStateOf(editor);
+    if (!sameUndoState(undo, lastUndo.current)) {
+      lastUndo.current = undo;
+      callbacks.current.onHistory?.(undo);
+    }
     const next = activeFormats(editor);
     if (sameSet(next, lastActive.current)) return;
     lastActive.current = next;
@@ -118,6 +208,7 @@ const RichEditor = forwardRef<
       StarterKit.configure({
         // Markdown has no underline, so it couldn't be saved.
         underline: false,
+        undoRedo: { depth: 300 },
         link: {
           openOnClick: false,
           autolink: true,
@@ -132,6 +223,7 @@ const RichEditor = forwardRef<
       TableKit,
       Placeholder.configure({ placeholder: placeholder ?? '' }),
       Markdown,
+      UndoSteps,
     ],
     content: value,
     contentType: 'markdown',
@@ -147,11 +239,12 @@ const RichEditor = forwardRef<
       },
     },
     onCreate: ({ editor: e }) => {
+      baseline.current = { given: value, written: markdownOf(e) };
       if (!keepsAllText(e, value)) callbacks.current.onUnsupported();
     },
     onUpdate: ({ editor: e }) => {
-      // Without the blank lines of the empty paragraph the editor keeps at the very end.
-      const md = e.getMarkdown().replace(/\n+$/, '');
+      const written = markdownOf(e);
+      const md = written === baseline.current.written ? baseline.current.given : written;
       lastEmitted.current = md;
       callbacks.current.onChange(md);
     },
@@ -159,13 +252,28 @@ const RichEditor = forwardRef<
     onTransaction: ({ editor: e }) => report(e),
   });
 
-  // Text replaced from outside (another device, a restored version): show it.
+  // Text replaced from outside: show it. A restored version or draft is one step that can be
+  // undone; an edit from another device starts the history again (undoing it would quietly
+  // overwrite that device's work).
   useEffect(() => {
-    if (!editor || value === lastEmitted.current) return;
-    lastEmitted.current = value;
-    editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false });
-    if (!keepsAllText(editor, value)) callbacks.current.onUnsupported();
-  }, [editor, value]);
+    if (!editor) return;
+    const reset = historyKey !== appliedKey.current;
+    appliedKey.current = historyKey;
+    if (value !== lastEmitted.current) {
+      lastEmitted.current = value;
+      // Only written differently (or back to the text it started from): nothing to show.
+      if (rendered(markdownOf(editor)) !== rendered(value))
+        editor
+          .chain()
+          .setMeta(OWN_STEP, true)
+          .setContent(value, { contentType: 'markdown', emitUpdate: false })
+          .run();
+      baseline.current = { given: value, written: markdownOf(editor) };
+      if (!keepsAllText(editor, value)) callbacks.current.onUnsupported();
+    }
+    if (reset) clearHistory(editor);
+    report(editor);
+  }, [editor, value, historyKey]);
 
   useImperativeHandle(
     ref,
@@ -173,7 +281,7 @@ const RichEditor = forwardRef<
       focus: () => editor?.commands.focus(undefined, { scrollIntoView: false }),
       format: (action) => {
         if (!editor) return;
-        const c = editor.chain().focus();
+        const c = editor.chain().focus().setMeta(OWN_STEP, true);
         switch (action) {
           case 'bold':
             return void c.toggleBold().run();
@@ -206,6 +314,7 @@ const RichEditor = forwardRef<
           editor
             .chain()
             .focus()
+            .setMeta(OWN_STEP, true)
             .insertContentAt(r.start, [
               { type: 'text', text: fallback, marks: [{ type: 'link', attrs: { href: url } }] },
               { type: 'text', text: ' ' },
@@ -216,6 +325,7 @@ const RichEditor = forwardRef<
         editor
           .chain()
           .focus()
+          .setMeta(OWN_STEP, true)
           .setTextSelection({ from: r.start, to: r.end })
           .setLink({ href: url })
           .setTextSelection(r.end)
@@ -223,7 +333,16 @@ const RichEditor = forwardRef<
           .run();
       },
       active: () => (editor ? activeFormats(editor) : new Set()),
-      unlink: () => void editor?.chain().focus().extendMarkRange('link').unsetLink().run(),
+      unlink: () =>
+        void editor
+          ?.chain()
+          .focus()
+          .setMeta(OWN_STEP, true)
+          .extendMarkRange('link')
+          .unsetLink()
+          .run(),
+      undo: () => void editor?.chain().focus().undo().run(),
+      redo: () => void editor?.chain().focus().redo().run(),
     }),
     [editor],
   );
@@ -326,7 +445,9 @@ function LinkBar({ editor, href }: { editor: Editor; href: string }) {
       </button>
       <button
         type="button"
-        onClick={() => editor.chain().focus().extendMarkRange('link').unsetLink().run()}
+        onClick={() =>
+          editor.chain().focus().setMeta(OWN_STEP, true).extendMarkRange('link').unsetLink().run()
+        }
         className="inline-flex h-9 shrink-0 items-center gap-1 rounded px-2 text-ink hover:bg-surface-2 sm:h-7"
       >
         <Unlink className="h-3.5 w-3.5" /> Unlink

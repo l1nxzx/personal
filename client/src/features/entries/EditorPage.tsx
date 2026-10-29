@@ -45,9 +45,11 @@ import { useDeleteEntry, useEntry, usePatchEntryMeta, useSetEntryFlags } from '.
 import {
   FormatBar,
   MarkdownEditor,
+  undoKey,
   type FormatAction,
   type MarkdownEditorHandle,
   type TextRange,
+  type UndoState,
 } from './MarkdownEditor';
 import { MomentDialog } from '../timeline/MomentDialog';
 import { BeliefStand, DecisionPanel, NotePanel } from './NoteDetails';
@@ -165,6 +167,8 @@ function WebLinkDialog({
     <Dialog open={open} onClose={onClose} title="Link to a web address" placement="top">
       <form
         className="space-y-3 p-4"
+        // "example.com" is fine (https:// is added); the browser's own URL check would refuse it.
+        noValidate
         onSubmit={(e) => {
           e.preventDefault();
           if (normalized) onSubmit(normalized);
@@ -295,6 +299,9 @@ function Editor({
   const [unsupported, setUnsupported] = useState(false);
   const rich = !plainPref && !unsupported;
   const [active, setActive] = useState<Set<FormatAction>>(() => new Set());
+  const [undoState, setUndoState] = useState<UndoState>({ undo: false, redo: false });
+  // Each editor keeps its own history: switching between them starts with nothing to undo.
+  useEffect(() => setUndoState({ undo: false, redo: false }), [rich]);
   const [webLink, setWebLink] = useState<{ range: TextRange; words: string } | null>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
   useAutosize(titleRef, ed.fields.title);
@@ -388,6 +395,11 @@ function Editor({
       setFocusMode((f) => !f);
     } else if (e.key === 'Escape' && focusMode && !e.defaultPrevented) {
       setFocusMode(false);
+    } else if (undoKey(e) && mode === 'write' && e.target === document.body) {
+      // Nothing focused (after a click on the page, say): undo still means the text.
+      e.preventDefault();
+      if (undoKey(e) === 'undo') editorRef.current?.undo();
+      else editorRef.current?.redo();
     }
   });
 
@@ -584,7 +596,15 @@ function Editor({
         </div>
         {showFormat && mode === 'write' && !focusMode && (
           <div className="mx-auto max-w-[52rem] border-t border-line px-2 py-1 sm:px-4">
-            <FormatBar onFormat={onFormat} active={rich ? active : undefined} rich={rich} />
+            <FormatBar
+              onFormat={onFormat}
+              active={rich ? active : undefined}
+              rich={rich}
+              history={undoState}
+              onHistory={(a) =>
+                a === 'undo' ? editorRef.current?.undo() : editorRef.current?.redo()
+              }
+            />
           </div>
         )}
       </div>
@@ -666,6 +686,8 @@ function Editor({
                     placeholder={bodyPlaceholder}
                     autoFocus={!entry && !isBelief}
                     onActive={setActive}
+                    onHistory={setUndoState}
+                    historyKey={ed.historyKey}
                     onUnsupported={() => setUnsupported(true)}
                   />
                 </Suspense>
@@ -678,6 +700,8 @@ function Editor({
                   ariaLabel={bodyLabel}
                   minRows={bodyRows}
                   placeholder={bodyPlaceholder}
+                  onHistory={setUndoState}
+                  historyKey={ed.historyKey}
                 />
               )}
             </div>
