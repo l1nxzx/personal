@@ -146,6 +146,33 @@
     }
   }
 
+  /* Vault door dial: turns while unlocking, shakes on a wrong passphrase. */
+  .vault-spin {
+    animation: vault-spin 1.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  }
+  .vault-shake {
+    animation: vault-shake 0.4s ease-in-out;
+  }
+  @keyframes vault-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes vault-shake {
+    25% {
+      transform: translateX(-6px);
+    }
+    75% {
+      transform: translateX(6px);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .vault-spin,
+    .vault-shake {
+      animation: none;
+    }
+  }
+
   /* Rendered Markdown (journal reading view, previews). */
   .prose-entry {
     @apply text-ink;

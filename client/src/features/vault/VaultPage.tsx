@@ -174,29 +174,62 @@ function Unlock() {
     }
   };
 
+  const denied = !!error && !busy;
   return (
     <div className="mt-6 max-w-sm">
-      <div className="flex items-center gap-3 text-ink-muted">
-        <LockKeyhole className="h-5 w-5" strokeWidth={1.75} />
-        <span className="text-sm">The vault is locked.</span>
+      {/* The vault door: bolted panel, combination dial, restricted marking. */}
+      <div className="relative overflow-hidden rounded-lg border border-line-strong bg-surface px-5 pb-6 pt-5 shadow-[inset_0_1px_0_rgb(var(--ink)/0.04),0_18px_40px_-20px_rgb(0_0_0/0.7)]">
+        {[
+          'left-2.5 top-2.5',
+          'right-2.5 top-2.5',
+          'bottom-2.5 left-2.5',
+          'bottom-2.5 right-2.5',
+        ].map((pos) => (
+          <span
+            key={pos}
+            aria-hidden
+            className={cn(
+              'absolute h-2 w-2 rounded-full border border-line-strong bg-surface-2',
+              pos,
+            )}
+          />
+        ))}
+        <div className="flex items-center justify-between font-mono text-2xs uppercase tracking-[0.2em]">
+          <span className={denied ? 'text-bad' : 'text-ink-faint'}>
+            {denied ? 'Access denied' : 'Restricted'}
+          </span>
+          <span className="text-ink-faint">AES-256</span>
+        </div>
+        <VaultDial state={busy ? 'turning' : denied ? 'denied' : 'locked'} />
+        <p className="text-center font-mono text-2xs uppercase tracking-[0.25em] text-ink-muted">
+          Encrypted vault
+        </p>
+        <p className="mt-1 text-center text-[0.8125rem] text-ink-faint">
+          Authorised access only. Nothing here can be read without the passphrase.
+        </p>
+
+        <form onSubmit={submit} className="mt-5 space-y-3">
+          <Field label="Passphrase" error={error}>
+            {(id) => (
+              <Input
+                id={id}
+                type="password"
+                value={pass}
+                onChange={(e) => {
+                  setPass(e.target.value);
+                  setError(null);
+                }}
+                autoComplete="current-password"
+                autoFocus
+                className="font-mono tracking-[0.2em]"
+              />
+            )}
+          </Field>
+          <Button type="submit" variant="primary" busy={busy} disabled={!pass} className="w-full">
+            <LockKeyhole className="h-4 w-4" /> {busy ? 'Unlocking…' : 'Unlock'}
+          </Button>
+        </form>
       </div>
-      <form onSubmit={submit} className="mt-5 space-y-4">
-        <Field label="Vault passphrase" error={error}>
-          {(id) => (
-            <Input
-              id={id}
-              type="password"
-              value={pass}
-              onChange={(e) => setPass(e.target.value)}
-              autoComplete="current-password"
-              autoFocus
-            />
-          )}
-        </Field>
-        <Button type="submit" variant="primary" busy={busy} disabled={!pass}>
-          {busy ? 'Unlocking…' : 'Unlock'}
-        </Button>
-      </form>
       <p className="mt-4 text-2xs text-ink-faint">
         Unlocking happens on this device. The passphrase is never sent anywhere.
       </p>
@@ -208,6 +241,82 @@ function Unlock() {
         Forgot the passphrase?
       </button>
       {forgot && <ResetVault />}
+    </div>
+  );
+}
+
+/** The combination dial on the vault door. Turns while unlocking; shakes on a wrong passphrase. */
+function VaultDial({ state }: { state: 'locked' | 'turning' | 'denied' }) {
+  const ticks = Array.from({ length: 60 }, (_, i) => i);
+  return (
+    <div aria-hidden className={cn('mx-auto my-5 h-40 w-40', state === 'denied' && 'vault-shake')}>
+      <svg viewBox="0 0 160 160" className="h-full w-full">
+        <circle
+          cx="80"
+          cy="80"
+          r="76"
+          fill="rgb(var(--bg))"
+          stroke="rgb(var(--line-strong))"
+          strokeWidth="2"
+        />
+        <circle cx="80" cy="80" r="68" fill="none" stroke="rgb(var(--line))" strokeWidth="1" />
+        <g
+          className={state === 'turning' ? 'vault-spin' : undefined}
+          style={{ transformOrigin: '80px 80px' }}
+        >
+          {ticks.map((i) => (
+            <line
+              key={i}
+              x1="80"
+              y1={i % 5 === 0 ? 14 : 17}
+              x2="80"
+              y2="22"
+              stroke={i % 5 === 0 ? 'rgb(var(--ink-muted))' : 'rgb(var(--ink-faint) / 0.6)'}
+              strokeWidth={i % 5 === 0 ? 1.5 : 1}
+              transform={`rotate(${i * 6} 80 80)`}
+            />
+          ))}
+          <circle
+            cx="80"
+            cy="80"
+            r="46"
+            fill="rgb(var(--surface-2))"
+            stroke="rgb(var(--line-strong))"
+            strokeWidth="1.5"
+          />
+          {[0, 120, 240].map((a) => (
+            <rect
+              key={a}
+              x="77"
+              y="38"
+              width="6"
+              height="26"
+              rx="3"
+              fill="rgb(var(--raised))"
+              stroke="rgb(var(--line-strong))"
+              transform={`rotate(${a} 80 80)`}
+            />
+          ))}
+          <circle
+            cx="80"
+            cy="80"
+            r="16"
+            fill="rgb(var(--raised))"
+            stroke="rgb(var(--line-strong))"
+            strokeWidth="1.5"
+          />
+        </g>
+        <path
+          d="M80 4 l-4 7 h8 z"
+          fill={state === 'denied' ? 'rgb(var(--bad))' : 'rgb(var(--accent))'}
+        />
+        <circle
+          cx="80"
+          cy="80"
+          r="4"
+          fill={state === 'denied' ? 'rgb(var(--bad))' : 'rgb(var(--accent) / 0.8)'}
+        />
+      </svg>
     </div>
   );
 }
