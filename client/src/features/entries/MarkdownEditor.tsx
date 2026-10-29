@@ -1,27 +1,58 @@
-import { Bold, Heading2, Italic, Link2, List, ListChecks, Paperclip, Quote } from 'lucide-react';
+import {
+  Bold,
+  Eraser,
+  Heading2,
+  Italic,
+  Link2,
+  List,
+  ListChecks,
+  Paperclip,
+  Quote,
+} from 'lucide-react';
 import { forwardRef, useImperativeHandle, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { useAutosize } from '../../hooks/useAutosize';
+import { parseAnchorUrl } from '../../lib/anchors';
 import { cn } from '../../lib/cn';
 import { isMod } from '../../lib/hotkeys';
-import { applyEdit, continueList, link, linkTo, togglePrefix, wrap, type Edit } from './markdown';
+import {
+  applyEdit,
+  continueList,
+  link,
+  linkAt,
+  linkTo,
+  togglePrefix,
+  wrap,
+  type Edit,
+} from './markdown';
+import { writingTextClass, writingTextStyle } from './writingStyle';
 
-/** `file` links the selected words to a file or folder; the page opens the picker for it. */
+/**
+ * `link` and `file` link the selected words to a web address or to a file or folder (the page
+ * asks which); `clear` removes all formatting from the selection (formatted editor only).
+ */
 export type FormatAction =
-  'heading' | 'bold' | 'italic' | 'quote' | 'list' | 'check' | 'link' | 'file';
+  'heading' | 'bold' | 'italic' | 'quote' | 'list' | 'check' | 'link' | 'file' | 'clear';
 
 export interface TextRange {
   start: number;
   end: number;
 }
 
+/** What the page can ask of either editor (formatted or plain Markdown). */
 export interface MarkdownEditorHandle {
   format: (action: FormatAction) => void;
   focus: () => void;
-  /** The selection (kept by the textarea even after it loses focus). */
+  /** The selection (kept even after the editor loses focus). */
   selection: () => TextRange;
   /** Turns `range` into a link to `url`; with an empty range, inserts `fallback` as the text. */
   linkRange: (range: TextRange, url: string, fallback: string) => void;
+  /** The text of a range as the person sees it. */
+  textOf: (range: TextRange) => string;
+  /** Formatting at the selection (the plain editor only knows about links). */
+  active: () => Set<FormatAction>;
+  /** Removes the link at the selection and keeps its words. */
+  unlink: () => void;
 }
 
 const FORMAT_BUTTONS: { action: FormatAction; label: string; icon: ReactNode }[] = [
@@ -31,39 +62,61 @@ const FORMAT_BUTTONS: { action: FormatAction; label: string; icon: ReactNode }[]
   { action: 'quote', label: 'Quote', icon: <Quote /> },
   { action: 'list', label: 'Bulleted list', icon: <List /> },
   { action: 'check', label: 'Checklist', icon: <ListChecks /> },
-  { action: 'link', label: 'Link', icon: <Link2 /> },
-  { action: 'file', label: 'Link words to a file or folder', icon: <Paperclip /> },
+  { action: 'link', label: 'Link to a web address', icon: <Link2 /> },
+  { action: 'file', label: 'Link to a file or folder', icon: <Paperclip /> },
+  { action: 'clear', label: 'Clear formatting', icon: <Eraser /> },
 ];
 
-/** A row of the few formatting actions worth a button. Everything else is plain Markdown. */
-export function FormatBar({ onFormat }: { onFormat: (a: FormatAction) => void }) {
+/**
+ * The few formatting actions worth a button. A button whose formatting is already applied to
+ * the selection is lit, and pressing it again removes that formatting.
+ */
+export function FormatBar({
+  onFormat,
+  active,
+  rich,
+}: {
+  onFormat: (a: FormatAction) => void;
+  active?: Set<FormatAction>;
+  /** The formatted editor (clearing formatting needs it). */
+  rich?: boolean;
+}) {
   return (
     <div
       className="scrollbar-none flex gap-0.5 overflow-x-auto"
       role="toolbar"
       aria-label="Formatting"
     >
-      {FORMAT_BUTTONS.map((b) => (
-        <button
-          key={b.action}
-          type="button"
-          aria-label={b.label}
-          title={b.label}
-          // Keep focus (and the selection) in the textarea.
-          onPointerDown={(e) => e.preventDefault()}
-          onClick={() => onFormat(b.action)}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded text-ink-muted hover:bg-surface-2 hover:text-ink sm:h-8 sm:w-8 [&>svg]:h-4 [&>svg]:w-4"
-        >
-          {b.icon}
-        </button>
-      ))}
+      {FORMAT_BUTTONS.filter((b) => rich || b.action !== 'clear').map((b) => {
+        const on = !!active?.has(b.action);
+        return (
+          <button
+            key={b.action}
+            type="button"
+            aria-label={b.label}
+            aria-pressed={b.action === 'clear' ? undefined : on}
+            title={on ? `${b.label} (press again to remove)` : b.label}
+            // Keep focus (and the selection) in the editor.
+            onPointerDown={(e) => e.preventDefault()}
+            onClick={() => onFormat(b.action)}
+            className={cn(
+              'flex h-10 w-10 shrink-0 items-center justify-center rounded transition-colors sm:h-8 sm:w-8 [&>svg]:h-4 [&>svg]:w-4',
+              on
+                ? 'bg-accent/15 text-accent ring-1 ring-inset ring-accent/40'
+                : 'text-ink-muted hover:bg-surface-2 hover:text-ink',
+            )}
+          >
+            {b.icon}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
 /**
- * Plain-textarea Markdown editor: fast to type in on any device, IME- and autocorrect-friendly.
- * Adds list continuation and a few formatting shortcuts.
+ * Plain-textarea Markdown editor: the fallback for text the formatted editor can't show, and
+ * for anyone who prefers to write the Markdown itself. Adds list continuation and shortcuts.
  */
 export const MarkdownEditor = forwardRef<
   MarkdownEditorHandle,
@@ -118,6 +171,24 @@ export const MarkdownEditor = forwardRef<
     }),
     linkRange: (r, url, fallback) =>
       el.current && run(linkTo(el.current.value, r.start, r.end, url, fallback)),
+    textOf: (r) => (el.current?.value ?? value).slice(r.start, r.end),
+    active: () => {
+      const t = el.current;
+      const at = t ? linkAt(t.value, t.selectionStart) : null;
+      return new Set<FormatAction>(at ? [parseAnchorUrl(at.url) ? 'file' : 'link'] : []);
+    },
+    unlink: () => {
+      const t = el.current;
+      const at = t ? linkAt(t.value, t.selectionStart) : null;
+      if (at)
+        run({
+          start: at.start,
+          end: at.end,
+          text: at.label,
+          selStart: at.start,
+          selEnd: at.start + at.label.length,
+        });
+    },
   }));
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -159,11 +230,9 @@ export const MarkdownEditor = forwardRef<
       autoCapitalize="sentences"
       className={cn(
         'block w-full resize-none overflow-hidden bg-transparent text-ink caret-accent placeholder:text-ink-faint focus:outline-none focus-visible:outline-none',
-        font === 'serif'
-          ? 'font-serif text-[1.125rem] leading-[1.8] sm:text-[1.1875rem]'
-          : 'font-sans text-[1.0625rem] leading-[1.75]',
+        writingTextClass(font),
       )}
-      style={font === 'serif' ? { fontVariationSettings: "'opsz' 16" } : undefined}
+      style={writingTextStyle(font)}
     />
   );
 });

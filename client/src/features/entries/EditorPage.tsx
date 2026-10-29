@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   Ellipsis,
   Eye,
+  Code,
   History,
   Info,
   Paperclip,
@@ -21,6 +22,8 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { Entry, EntryKind, NoteMeta, NoteType, Perspective } from '../../../../shared/types';
 import { Button, IconButton } from '../../components/ui/Button';
+import { Dialog } from '../../components/ui/Dialog';
+import { Input } from '../../components/ui/Field';
 import { Menu } from '../../components/ui/Menu';
 import { ErrorNote, Loading } from '../../components/ui/misc';
 import { Skeleton, SkeletonText } from '../../components/ui/Skeleton';
@@ -133,6 +136,68 @@ function ExistingEntry({ kind, id }: { kind: EntryKind; id: string }) {
   );
 }
 
+const loadRichEditor = () => import('./RichEditor');
+const RichEditor = lazy(loadRichEditor);
+/** Fetches the formatted editor's code ahead of time (it is only needed when writing). */
+export const preloadRichEditor = () => void loadRichEditor().catch(() => {});
+
+/** Ask for the web address to link the selected words to. */
+function WebLinkDialog({
+  open,
+  words,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  words: string;
+  onClose: () => void;
+  onSubmit: (url: string) => void;
+}) {
+  const [url, setUrl] = useState('');
+  useEffect(() => {
+    if (open) setUrl('');
+  }, [open]);
+  const normalized = (() => {
+    const u = url.trim();
+    if (!u) return '';
+    return /^[a-z][a-z0-9+.-]*:/i.test(u) ? u : `https://${u}`;
+  })();
+  return (
+    <Dialog open={open} onClose={onClose} title="Link to a web address" placement="top">
+      <form
+        className="space-y-3 p-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (normalized) onSubmit(normalized);
+        }}
+      >
+        {words && (
+          <p className="truncate text-[0.8125rem] text-ink-muted">
+            Linking <span className="text-ink">“{words}”</span>
+          </p>
+        )}
+        <Input
+          type="url"
+          inputMode="url"
+          autoFocus
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="example.com/page"
+          aria-label="Web address"
+        />
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" disabled={!normalized}>
+            Link
+          </Button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+
 function statusLabel(status: SaveStatus, savedAt: number | null): { text: string; tone: string } {
   switch (status) {
     case 'new':
@@ -226,6 +291,13 @@ function Editor({
     () => readJSON<boolean>('editor:formatbar') ?? false,
   );
   const editorRef = useRef<MarkdownEditorHandle>(null);
+  // Formatted writing (as it reads) unless the owner prefers Markdown, or this text has
+  // something the formatted editor can't show.
+  const [plainPref, setPlainPref] = useState(() => readJSON<boolean>('editor:plain') === true);
+  const [unsupported, setUnsupported] = useState(false);
+  const rich = !plainPref && !unsupported;
+  const [active, setActive] = useState<Set<FormatAction>>(() => new Set());
+  const [webLink, setWebLink] = useState<{ range: TextRange; words: string } | null>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
   useAutosize(titleRef, ed.fields.title);
 
@@ -255,14 +327,22 @@ function Editor({
     saveNote(ed.id, patch);
   };
   const del = useDeleteEntry(kind);
+  const bodyLabel = kind === 'journal' ? 'Journal entry' : kind === 'note' ? 'Note' : 'Text';
+  const bodyRows = kind === 'note' ? 3 : 8;
+  const bodyPlaceholder = isBelief
+    ? 'Anything else: background, arguments, what you have read… (optional)'
+    : kind === 'journal'
+      ? 'Write about your day, or anything at all…'
+      : kind === 'note'
+        ? 'Write it out: an explanation, an argument, a question, a passage…'
+        : 'Start writing…';
 
-  const pickFileForWords = () => {
-    const range = editorRef.current?.selection() ?? {
-      start: ed.fields.body.length,
-      end: ed.fields.body.length,
-    };
-    setFilePick({ range, words: ed.fields.body.slice(range.start, range.end).trim() });
+  const currentSelection = () => {
+    const h = editorRef.current;
+    const range = h?.selection() ?? { start: 0, end: 0 };
+    return { range, words: h?.textOf(range).trim() ?? '' };
   };
+  const pickFileForWords = () => setFilePick(currentSelection());
   const linkWords = (ref: AnchorRef, name: string) => {
     const pick = filePick;
     setFilePick(null);
@@ -278,8 +358,26 @@ function Editor({
     });
     toast({ message: `Linked ${pick.words ? `“${pick.words}”` : 'it'} to ${name}` });
   };
-  const onFormat = (a: FormatAction) =>
-    a === 'file' ? pickFileForWords() : editorRef.current?.format(a);
+  // Pressing a link button on words that already have that kind of link removes it.
+  const onFormat = (a: FormatAction) => {
+    const h = editorRef.current;
+    if (!h) return;
+    if (a !== 'file' && a !== 'link') return h.format(a);
+    if (h.active().has(a)) return h.unlink();
+    if (a === 'file') return pickFileForWords();
+    if (!rich) return h.format('link'); // plain Markdown: [words](https://) to fill in
+    setWebLink(currentSelection());
+  };
+  const linkToWeb = (url: string) => {
+    const pick = webLink;
+    setWebLink(null);
+    if (pick) editorRef.current?.linkRange(pick.range, url, url.replace(/^https?:\/\//, ''));
+  };
+  const togglePlain = () => {
+    const next = !plainPref;
+    setPlainPref(next);
+    writeJSON('editor:plain', next);
+  };
 
   // Start typing straight away in a new entry.
   useEffect(() => {
@@ -430,6 +528,17 @@ function Editor({
                         icon: <Paperclip />,
                         onSelect: pickFileForWords,
                       },
+                      ...(unsupported
+                        ? []
+                        : [
+                            {
+                              label: plainPref
+                                ? 'Show formatting while writing'
+                                : 'Write in plain Markdown',
+                              icon: <Code />,
+                              onSelect: togglePlain,
+                            },
+                          ]),
                     ]
                   : []),
                 ...(kind !== 'journal' && live
@@ -483,7 +592,7 @@ function Editor({
         </div>
         {showFormat && mode === 'write' && !focusMode && (
           <div className="mx-auto max-w-[52rem] border-t border-line px-2 py-1 sm:px-4">
-            <FormatBar onFormat={onFormat} />
+            <FormatBar onFormat={onFormat} active={rich ? active : undefined} rich={rich} />
           </div>
         )}
       </div>
@@ -534,7 +643,11 @@ function Editor({
             )}
             {/* A belief leads with where you stand; its kind, topic and sources come after. */}
             {isBelief && (
-              <BeliefStand perspectives={noteMeta.perspectives} onChange={changeStand} />
+              <BeliefStand
+                perspectives={noteMeta.perspectives}
+                onChange={changeStand}
+                font={font}
+              />
             )}
             {kind === 'note' && !focusMode && (
               <div className={isBelief ? 'mt-8' : undefined}>
@@ -543,23 +656,38 @@ function Editor({
             )}
             {isBelief && <h2 className="section-label mt-12">Notes</h2>}
             <div className={isBelief ? 'mt-3' : 'mt-6'}>
-              <MarkdownEditor
-                ref={editorRef}
-                value={ed.fields.body}
-                onChange={(body) => ed.setFields({ body })}
-                font={font}
-                ariaLabel={kind === 'journal' ? 'Journal entry' : kind === 'note' ? 'Note' : 'Text'}
-                minRows={kind === 'note' ? 3 : 8}
-                placeholder={
-                  isBelief
-                    ? 'Anything else: background, arguments, what you have read… (optional)'
-                    : kind === 'journal'
-                      ? 'Write about your day, or anything at all…'
-                      : kind === 'note'
-                        ? 'Write it out: an explanation, an argument, a question, a passage…'
-                        : 'Start writing…'
-                }
-              />
+              {unsupported && !plainPref && (
+                <p className="mb-3 text-2xs text-ink-faint">
+                  This text uses Markdown the formatted view can&apos;t show without losing
+                  something, so it&apos;s edited as Markdown.
+                </p>
+              )}
+              {rich ? (
+                <Suspense fallback={<div style={{ minHeight: `${bodyRows * 1.75}em` }} />}>
+                  <RichEditor
+                    ref={editorRef}
+                    value={ed.fields.body}
+                    onChange={(body) => ed.setFields({ body })}
+                    font={font}
+                    ariaLabel={bodyLabel}
+                    minRows={bodyRows}
+                    placeholder={bodyPlaceholder}
+                    autoFocus={!entry && !isBelief}
+                    onActive={setActive}
+                    onUnsupported={() => setUnsupported(true)}
+                  />
+                </Suspense>
+              ) : (
+                <MarkdownEditor
+                  ref={editorRef}
+                  value={ed.fields.body}
+                  onChange={(body) => ed.setFields({ body })}
+                  font={font}
+                  ariaLabel={bodyLabel}
+                  minRows={bodyRows}
+                  placeholder={bodyPlaceholder}
+                />
+              )}
             </div>
           </>
         ) : (
@@ -580,7 +708,12 @@ function Editor({
               </p>
             )}
             {isBelief && (
-              <BeliefStand readOnly perspectives={noteMeta.perspectives} onChange={changeStand} />
+              <BeliefStand
+                readOnly
+                font={font}
+                perspectives={noteMeta.perspectives}
+                onChange={changeStand}
+              />
             )}
             {isBelief && ed.fields.body.trim() && <h2 className="section-label mt-12">Notes</h2>}
             <Suspense fallback={<Loading />}>
@@ -610,6 +743,12 @@ function Editor({
             className="mt-14"
           />
         )}
+        <WebLinkDialog
+          open={!!webLink}
+          words={webLink?.words ?? ''}
+          onClose={() => setWebLink(null)}
+          onSubmit={linkToWeb}
+        />
         <FilePicker
           open={!!filePick}
           onClose={() => setFilePick(null)}

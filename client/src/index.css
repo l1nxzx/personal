@@ -216,6 +216,62 @@
   .prose-entry strong {
     @apply font-semibold;
   }
+
+  /*
+   * Words linked to a library file or folder: quiet dotted underline and a small icon, the same
+   * in the reading view (`a.entry-anchor`) and while writing (the raw `doc:`/`folder:` link).
+   */
+  .prose-entry a.entry-anchor,
+  .prose-entry a[href^='doc:'],
+  .prose-entry a[href^='folder:'] {
+    @apply text-ink decoration-accent/60 decoration-dotted underline-offset-4 hover:decoration-accent;
+  }
+  .prose-entry a.entry-anchor::after,
+  .prose-entry a[href^='doc:']::after,
+  .prose-entry a[href^='folder:']::after {
+    content: '';
+    display: inline-block;
+    width: 0.7em;
+    height: 0.7em;
+    margin-left: 0.15em;
+    background-color: rgb(var(--accent) / 0.8);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+  }
+  .prose-entry a.entry-anchor-folder::after,
+  .prose-entry a[href^='folder:']::after {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z'/%3E%3C/svg%3E");
+  }
+
+  /* The writing view (Tiptap): checklists as in the reading view, and the empty-text hint. */
+  .prose-entry ul[data-type='taskList'] {
+    @apply list-none pl-1;
+  }
+  .prose-entry ul[data-type='taskList'] li {
+    @apply flex items-baseline gap-2;
+  }
+  .prose-entry ul[data-type='taskList'] li > label {
+    @apply shrink-0;
+  }
+  .prose-entry ul[data-type='taskList'] li > label input {
+    @apply mr-0;
+  }
+  .prose-entry ul[data-type='taskList'] li > div {
+    @apply min-w-0 flex-1;
+  }
+  .prose-entry.ProseMirror {
+    outline: none;
+  }
+  .prose-entry.ProseMirror p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+    color: rgb(var(--ink-faint));
+  }
 }
 
 @layer utilities {

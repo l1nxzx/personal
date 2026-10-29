@@ -1,10 +1,10 @@
-import { FolderClosed, Paperclip } from 'lucide-react';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import { Link } from 'react-router-dom';
 import remarkGfm from 'remark-gfm';
 import { parseAnchorUrl } from '../../lib/anchors';
 import { cn } from '../../lib/cn';
 import { hrefFor } from '../../lib/routes';
+import { proseClass, proseStyle } from './writingStyle';
 
 /** Rendered Markdown for reading. Raw HTML is not rendered (react-markdown escapes it). */
 export default function MarkdownView({
@@ -17,14 +17,7 @@ export default function MarkdownView({
   className?: string;
 }) {
   return (
-    <div
-      className={cn('prose-entry', font === 'serif' ? 'font-serif' : 'font-sans', className)}
-      style={
-        font === 'serif'
-          ? { fontVariationSettings: "'opsz' 16" }
-          : { ['--entry-size' as string]: '1.0625rem' }
-      }
-    >
+    <div className={cn(proseClass(font), className)} style={proseStyle(font)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         // Keep in-app addresses of linked files and folders; everything else as usual.
@@ -39,18 +32,14 @@ export default function MarkdownView({
                 </a>
               );
             }
-            const Icon = anchor.type === 'folder' ? FolderClosed : Paperclip;
+            // Styled by `.entry-anchor` (index.css), the same as in the writing view.
             return (
               <Link
                 to={hrefFor(anchor.type, anchor.id)}
                 title={anchor.type === 'folder' ? 'Open the linked folder' : 'Open the linked file'}
-                className="text-ink underline decoration-accent/60 decoration-dotted underline-offset-4 hover:decoration-accent"
+                className={cn('entry-anchor', anchor.type === 'folder' && 'entry-anchor-folder')}
               >
                 {children}
-                <Icon
-                  className="ml-0.5 inline-block h-[0.7em] w-[0.7em] align-baseline text-accent/80"
-                  aria-label={anchor.type === 'folder' ? '(folder)' : '(file)'}
-                />
               </Link>
             );
           },

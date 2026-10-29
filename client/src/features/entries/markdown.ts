@@ -108,6 +108,21 @@ export function linkTo(
   return { start: s, end: e, text, selStart: s + text.length, selEnd: s + text.length };
 }
 
+/** The Markdown link `[label](url)` around position `at`, if any (label unescaped). */
+export function linkAt(
+  value: string,
+  at: number,
+): { start: number; end: number; label: string; url: string } | null {
+  for (const m of value.matchAll(/\[((?:\\.|[^\]\\])*)\]\(([^)\s]*)\)/g)) {
+    const start = m.index;
+    const end = start + m[0].length;
+    if (at >= start && at <= end)
+      return { start, end, label: m[1]!.replace(/\\(.)/g, '$1'), url: m[2]! };
+    if (start > at) break;
+  }
+  return null;
+}
+
 /**
  * Enter inside a list or quote continues it; Enter on an empty item ends it.
  * Returns null when Enter should behave normally.
