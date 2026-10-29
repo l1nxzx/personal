@@ -15,7 +15,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { errorMessage } from '../../lib/apiFetch';
 import { daysBetween, formatRelativeDay, toLocalDate } from '../../lib/dates';
-import { formatSize } from '../library/api';
+import { formatSize } from '../documents/api';
 import { useProfile, useRecount } from './api';
 
 const nf = new Intl.NumberFormat();
@@ -87,7 +87,8 @@ const CONTENT_GROUPS: { title: string; keys: ContentStatKey[] }[] = [
   { title: 'Ideas & Knowledge', keys: ['note'] },
   { title: 'Money & Work', keys: ['moneyIdea', 'income', 'expense', 'subscription'] },
   { title: 'Projects & Tasks', keys: ['project', 'task'] },
-  { title: 'Library', keys: ['book', 'document'] },
+  { title: 'Library', keys: ['book'] },
+  { title: 'Documents', keys: ['document'] },
   { title: 'Private Vault', keys: ['vault'] },
 ];
 

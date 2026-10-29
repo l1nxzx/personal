@@ -321,7 +321,7 @@ export interface DocumentFile {
   name: string;
   mime: string;
   size: number;
-  /** The folder it sits in; null means the top level of the library. */
+  /** The folder it sits in; null means the top level of Documents. */
   folderId: string | null;
   tags: string[];
   favorite: boolean;
@@ -336,7 +336,7 @@ export type UpdateDocumentRequest = Partial<
   Pick<DocumentFile, 'name' | 'folderId' | 'tags' | 'favorite'>
 >;
 
-/** A library folder. Folders nest through `parentId` (null = top level). */
+/** A Documents folder. Folders nest through `parentId` (null = top level). */
 export interface DocumentFolder {
   id: string;
   name: string;
@@ -366,7 +366,7 @@ export interface MoveItemsRequest extends LibrarySelection {
 export interface FolderSizes {
   /** Keyed by folder id; folders with nothing inside are absent. */
   folders: Record<string, { bytes: number; files: number }>;
-  /** The whole library. */
+  /** All documents. */
   total: { bytes: number; files: number };
 }
 

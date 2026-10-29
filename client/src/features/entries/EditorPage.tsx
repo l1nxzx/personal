@@ -38,7 +38,7 @@ import { keys } from '../../lib/keys';
 import { ENTRY_LIST } from '../../lib/routes';
 import { readJSON, writeJSON } from '../../lib/storage';
 import { anchorsIn, anchorUrl, type AnchorRef } from '../../lib/anchors';
-import { FilePicker } from '../library/FilePicker';
+import { FilePicker } from '../documents/FilePicker';
 import { LinksPanel } from '../links/LinksPanel';
 import { usePrefs } from '../me/api';
 import { useDeleteEntry, useEntry, usePatchEntryMeta, useSetEntryFlags } from './api';

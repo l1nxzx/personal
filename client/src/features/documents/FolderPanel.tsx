@@ -65,7 +65,7 @@ function Body({
   onRename: (f: DocumentFolder) => void;
   onMove: (f: DocumentFolder) => void;
 }) {
-  // Keyed under 'documents' so any library change refreshes it.
+  // Keyed under 'documents' so any documents change refreshes it.
   const usage = useQuery({
     queryKey: ['documents', 'usage', folder.id],
     queryFn: () => folderUsage([folder.id]),

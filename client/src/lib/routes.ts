@@ -32,9 +32,9 @@ export function hrefFor(type: RefType | SearchType, id: string): string {
     case 'project':
       return `/tasks/projects/${id}`;
     case 'document':
-      return `/library/documents?doc=${id}`;
+      return `/documents?doc=${id}`;
     case 'folder':
-      return `/library/documents?folder=${id}`;
+      return `/documents?folder=${id}`;
     case 'income':
       return `/money?entry=${id}`;
     case 'expense':

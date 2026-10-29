@@ -4,14 +4,13 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { BookStatus, BookSummary } from '../../../../shared/types';
 import { Page, PageHeader } from '../../components/shell/PageHeader';
 import { Button } from '../../components/ui/Button';
-import { Empty, ErrorNote, TabLinks } from '../../components/ui/misc';
+import { Empty, ErrorNote } from '../../components/ui/misc';
 import { Skeleton, SkeletonText, skeletonWidth } from '../../components/ui/Skeleton';
 import { useToast } from '../../context/ToastContext';
 import { errorMessage } from '../../lib/apiFetch';
 import { cn } from '../../lib/cn';
 import { formatRelativeDay, parseLocalDate } from '../../lib/dates';
 import { useBooks, useCreateBook } from './api';
-import { DocumentsView } from './DocumentsView';
 
 export const BOOK_STATUS: { value: BookStatus; label: string }[] = [
   { value: 'reading', label: 'Reading' },
@@ -20,26 +19,11 @@ export const BOOK_STATUS: { value: BookStatus; label: string }[] = [
   { value: 'paused', label: 'Paused' },
 ];
 
-export function LibraryHeader() {
+export default function LibraryPage() {
   return (
-    <PageHeader title="Library">
-      <div className="mt-4">
-        <TabLinks
-          tabs={[
-            { to: '/library', label: 'Books', end: true },
-            { to: '/library/documents', label: 'Documents' },
-          ]}
-        />
-      </div>
-    </PageHeader>
-  );
-}
-
-export default function LibraryPage({ tab }: { tab: 'books' | 'documents' }) {
-  return (
-    <Page width={tab === 'documents' ? 'wide' : 'default'}>
-      <LibraryHeader />
-      {tab === 'books' ? <BooksView /> : <DocumentsView />}
+    <Page>
+      <PageHeader title="Library" />
+      <BooksView />
     </Page>
   );
 }

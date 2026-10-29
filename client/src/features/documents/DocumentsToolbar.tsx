@@ -22,7 +22,7 @@ import { Menu, type MenuItem } from '../../components/ui/Menu';
 import { cn } from '../../lib/cn';
 import { FilterSearch } from '../entries/ListParts';
 import { defaultDir, SORT_LABEL, type Sort, type SortKey } from './folderTree';
-import { useDropTarget } from './LibraryItems';
+import { useDropTarget } from './DocumentItems';
 
 export type Scope = 'files' | 'recent' | 'starred';
 

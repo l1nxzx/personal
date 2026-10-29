@@ -18,6 +18,7 @@ const pages = {
   ProjectPage: () => import('./features/projects/ProjectPage'),
   LibraryPage: () => import('./features/library/LibraryPage'),
   BookPage: () => import('./features/library/BookPage'),
+  DocumentsPage: () => import('./features/documents/DocumentsPage'),
   MoneyPage: () => import('./features/money/MoneyPage'),
   ExpensesPage: () => import('./features/money/ExpensesPage'),
   MoneyIdeasPage: () => import('./features/money/MoneyIdeasPage'),
@@ -42,6 +43,7 @@ const InboxPage = lazy(pages.InboxPage);
 const ProjectPage = lazy(pages.ProjectPage);
 const LibraryPage = lazy(pages.LibraryPage);
 const BookPage = lazy(pages.BookPage);
+const DocumentsPage = lazy(pages.DocumentsPage);
 const MoneyPage = lazy(pages.MoneyPage);
 const ExpensesPage = lazy(pages.ExpensesPage);
 const MoneyIdeasPage = lazy(pages.MoneyIdeasPage);
@@ -67,6 +69,12 @@ function RequireUser() {
   if (!user)
     return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   return <Outlet />;
+}
+
+/** Documents used to live under Library; old addresses (bookmarks, history) still open. */
+function MovedToDocuments() {
+  const { search, hash } = useLocation();
+  return <Navigate to={{ pathname: '/documents', search, hash }} replace />;
 }
 
 function GuestOnly() {
@@ -111,9 +119,11 @@ export default function App() {
             <Route path="tasks/projects" element={<TasksPage view="projects" />} />
             <Route path="tasks/projects/:id" element={<ProjectPage />} />
 
-            <Route path="library" element={<LibraryPage tab="books" />} />
-            <Route path="library/documents" element={<LibraryPage tab="documents" />} />
+            <Route path="library" element={<LibraryPage />} />
             <Route path="library/books/:id" element={<BookPage />} />
+
+            <Route path="documents" element={<DocumentsPage />} />
+            <Route path="library/documents" element={<MovedToDocuments />} />
 
             <Route path="vault" element={<VaultPage />} />
             <Route path="profile" element={<ProfilePage />} />

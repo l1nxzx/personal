@@ -1,7 +1,7 @@
 import type { Entry, EntryKind } from '../../../../shared/types';
 import { MetadataDialog, timeRow, type MetadataSection } from '../../components/ui/Metadata';
 import { formatLongDate, formatRelativeDay } from '../../lib/dates';
-import { formatSize } from '../library/api';
+import { formatSize } from '../documents/api';
 import { useLinks } from '../links/api';
 import { noteTypeLabel } from './NoteDetails';
 import { useVersions } from './VersionHistory';

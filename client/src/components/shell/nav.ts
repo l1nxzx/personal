@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  FolderOpen,
   House,
   Library,
   Lightbulb,
@@ -42,6 +43,7 @@ export const NAV: NavItem[] = [
     icon: ListChecks,
   },
   { to: '/library', label: 'Library', title: 'Library', icon: Library },
+  { to: '/documents', label: 'Documents', title: 'Documents', icon: FolderOpen },
   { to: '/vault', label: 'Vault', title: 'Private Vault', icon: LockKeyhole },
 ];
 

@@ -19,7 +19,7 @@ import { useNavigate } from 'react-router-dom';
 import { parseAnchorUrl, type AnchorRef } from '../../lib/anchors';
 import { cn } from '../../lib/cn';
 import { hrefFor } from '../../lib/routes';
-import { useDocument, useFolders } from '../library/api';
+import { useDocument, useFolders } from '../documents/api';
 import type { FormatAction, MarkdownEditorHandle } from './MarkdownEditor';
 import { proseClass, type WritingFont } from './writingStyle';
 

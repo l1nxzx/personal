@@ -17,8 +17,8 @@ export type Entry =
 
 export const entryName = (e: Entry) => (e.kind === 'folder' ? e.folder.name : e.file.name);
 
-/** Drag payload type for moving items inside the library (OS files arrive as 'Files'). */
-export const DRAG_TYPE = 'application/x-notebook-library';
+/** Drag payload type for moving items between folders (OS files arrive as 'Files'). */
+export const DRAG_TYPE = 'application/x-notebook-documents';
 
 export interface ItemHandlers {
   selected: Set<ItemKey>;
@@ -30,7 +30,7 @@ export interface ItemHandlers {
   onStar: (f: DocumentFile) => void;
   /** Starts dragging this item (or the whole selection when it is part of it). */
   onDragStart: (e: Entry, ev: React.DragEvent) => void;
-  /** Something was dropped on a folder: library items or files from the computer. */
+  /** Something was dropped on a folder: files and folders from this page, or files from the computer. */
   onDropOnFolder: (folderId: string, ev: React.DragEvent) => void;
   /** "Taxes / 2025" under each item, for search results and Recent/Starred. */
   locate?: (folderId: string | null) => string;

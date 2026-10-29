@@ -110,7 +110,7 @@ export function FolderMetadata({
 }) {
   const sizes = useFolderSizes();
   const usage = useQuery({
-    // Keyed under 'documents' so any library change refreshes it.
+    // Keyed under 'documents' so any documents change refreshes it.
     queryKey: ['documents', 'usage', folder?.id],
     queryFn: () => folderUsage([folder!.id]),
     enabled: !!folder,

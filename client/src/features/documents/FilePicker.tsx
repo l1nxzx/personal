@@ -12,7 +12,7 @@ type Option =
   | { kind: 'file'; ref: AnchorRef; name: string; where: string; file: DocumentFile }
   | { kind: 'folder'; ref: AnchorRef; name: string; where: string; folder: DocumentFolder };
 
-/** Choose one file or folder from the library, by search or from recent ones. */
+/** Choose one file or folder from Documents, by search or from recent ones. */
 export function FilePicker({
   open,
   onClose,
@@ -138,7 +138,7 @@ function Picker({
         )}
         {!searching && recent.isSuccess && options.length === 0 && (
           <p className="px-4 py-3 text-sm text-ink-faint">
-            Nothing in the library yet. Upload files in Library → Documents.
+            No files yet. Upload files in Documents.
           </p>
         )}
         {options.map((o, i) => (

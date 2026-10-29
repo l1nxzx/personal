@@ -11,7 +11,7 @@ import { useAutosize } from '../../hooks/useAutosize';
 import { ApiError, errorMessage } from '../../lib/apiFetch';
 import { cn } from '../../lib/cn';
 import { formatAgo, formatLongDate, today } from '../../lib/dates';
-import { formatSize } from '../library/api';
+import { formatSize } from '../documents/api';
 import { usePrefs } from '../me/api';
 import { MarkdownEditor } from '../entries/MarkdownEditor';
 import { useVault, type DecryptedItem, type VaultContent } from './VaultContext';

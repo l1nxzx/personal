@@ -67,9 +67,9 @@ import {
   ListView,
   type Entry,
   type ItemHandlers,
-} from './LibraryItems';
+} from './DocumentItems';
 import { FileMetadata, FolderMetadata } from './ItemMetadata';
-import { Breadcrumbs, ScopeTabs, SelectionBar, Toolbar, type Scope } from './LibraryToolbar';
+import { Breadcrumbs, ScopeTabs, SelectionBar, Toolbar, type Scope } from './DocumentsToolbar';
 import { MoveDialog, type MoveTarget } from './MoveDialog';
 import { NameDialog } from './NameDialog';
 import { MAX_UPLOAD_BYTES, UploadPanel, useUploadQueue } from './UploadQueue';
@@ -107,7 +107,7 @@ function download(file: DocumentFile) {
   a.remove();
 }
 
-/** Parses a library drag payload, ignoring anything that isn't a list of item keys. */
+/** Parses a documents drag payload, ignoring anything that isn't a list of item keys. */
 function draggedKeys(ev: React.DragEvent): ItemKey[] | null {
   const raw = ev.dataTransfer.getData(DRAG_TYPE);
   if (!raw) return null;
@@ -518,7 +518,7 @@ export function DocumentsView() {
     if (ok.length) uploads.add(ok, target, locationLabel(tree, target));
   };
 
-  /** Library items dropped on a folder move there; files from the computer upload there. */
+  /** Files and folders dropped on a folder move there; files from the computer upload there. */
   const dropOn = (targetId: string | null, ev: React.DragEvent) => {
     const keys = draggedKeys(ev);
     if (keys) {
@@ -583,7 +583,7 @@ export function DocumentsView() {
   // ---------------------------------------------------------------- render
   const folderCount = entries.filter((e) => e.kind === 'folder').length;
   const fileCount = entries.length - folderCount;
-  // What this folder holds in total (with everything below it); the whole library at the top.
+  // What this folder holds in total (with everything below it); all documents at the top.
   const storedHere =
     scope === 'files' && !searching && sizes.data
       ? folderId
