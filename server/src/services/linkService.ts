@@ -11,6 +11,7 @@ import { anchorKeys } from '../lib/anchors.js';
 import { badRequest, notFound } from '../lib/errors.js';
 import { notifyChange, type Ctx } from './context.js';
 import { folderNames } from './folderService.js';
+import { recordAction } from './activityService.js';
 
 export const refKey = (r: Ref) => `${r.type}:${r.id}`;
 const parseKey = (key: string): Ref => {
@@ -128,6 +129,7 @@ export async function addLink(ctx: Ctx, from: Ref, to: Ref): Promise<void> {
     throw notFound('One of these items no longer exists');
   await links.add(ctx.userId, refKey(from), refKey(to), 'manual');
   notifyChange(ctx, 'link');
+  await recordAction(ctx, 'link.created', [refKey(from), refKey(to)].sort().join('~'));
 }
 
 /**

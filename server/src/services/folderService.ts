@@ -15,6 +15,7 @@ import { buildSearchTerms, fold, matchesAll } from '../lib/text.js';
 import { notifyChange, type Ctx } from './context.js';
 import { removeStoredDocument, requireFolderOrRoot } from './documentService.js';
 import { ensureLibraryMigrated } from './libraryMigration.js';
+import { recordAction } from './activityService.js';
 
 /** Deep enough for any real archive, shallow enough that walking up a path stays cheap. */
 export const MAX_DEPTH = 20;
@@ -127,6 +128,7 @@ export async function createFolder(ctx: Ctx, input: CreateFolderRequest): Promis
   const record = { id: folders.newId(uid), name, parentId, createdAt: now, updatedAt: now };
   await folders.create(uid, record);
   notifyChange(ctx, 'document');
+  await recordAction(ctx, 'folder.created', record.id);
   return toFolder(record);
 }
 
@@ -148,6 +150,7 @@ export async function updateFolder(
       const siblings = await folders.listChildren(uid, parentId);
       if (siblings.some((f) => f.id !== id && sameName(f.name, name))) throw nameTaken(name);
       await folders.update(uid, id, { name, updatedAt: new Date().toISOString() });
+      await recordAction(ctx, 'document.organized', id);
     }
   }
   notifyChange(ctx, 'document');
@@ -166,7 +169,7 @@ export async function moveItems(
   await ensureLibraryMigrated(uid);
   const { targetId } = input;
   const now = new Date().toISOString();
-  let movedFolders = 0;
+  let movedFolders: string[] = [];
 
   if (input.folderIds.length) {
     const all = await folders.listAll(uid);
@@ -193,7 +196,7 @@ export async function moveItems(
       names.push(f.name);
     }
     for (const f of moving) await folders.update(uid, f.id, { parentId: targetId, updatedAt: now });
-    movedFolders = moving.length;
+    movedFolders = moving.map((f) => f.id);
   } else {
     await requireFolderOrRoot(uid, targetId);
   }
@@ -208,8 +211,9 @@ export async function moveItems(
     now,
   );
 
-  if (files.length || movedFolders) notifyChange(ctx, 'document');
-  return { files: files.length, folders: movedFolders };
+  if (files.length || movedFolders.length) notifyChange(ctx, 'document');
+  await recordAction(ctx, 'document.organized', [...files.map((d) => d.id), ...movedFolders]);
+  return { files: files.length, folders: movedFolders.length };
 }
 
 /** Everything inside the given folders, at any depth (the folders themselves aren't counted). */

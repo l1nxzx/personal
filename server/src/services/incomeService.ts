@@ -9,6 +9,7 @@ import * as income from '../data/incomeRepo.js';
 import { notFound } from '../lib/errors.js';
 import { buildSearchTerms } from '../lib/text.js';
 import { notifyChange, type Ctx } from './context.js';
+import { recordAction } from './activityService.js';
 
 /** "Gumroad", "gumroad " and "GUMROAD" are one source. Safe as a Firestore map key. */
 export const sourceKey = (source: string) =>
@@ -57,6 +58,7 @@ export async function addIncome(ctx: Ctx, input: CreateIncomeRequest): Promise<I
   record.searchTerms = terms(record);
   await income.create(ctx.userId, record);
   notifyChange(ctx, 'income', id);
+  await recordAction(ctx, 'income.created', id);
   return toIncome(record);
 }
 

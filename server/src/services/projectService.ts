@@ -12,6 +12,7 @@ import { notFound } from '../lib/errors.js';
 import { buildSearchTerms } from '../lib/text.js';
 import { notifyChange, type Ctx } from './context.js';
 import { textStatsOf } from './textStats.js';
+import { recordAction } from './activityService.js';
 
 export const toProject = (r: projects.ProjectRecord): Project => ({
   id: r.id,
@@ -48,6 +49,7 @@ export async function createProject(ctx: Ctx, input: CreateProjectRequest): Prom
   };
   await projects.create(ctx.userId, record);
   notifyChange(ctx, 'project', record.id);
+  await recordAction(ctx, 'project.created', record.id);
   return toProject(record);
 }
 
@@ -87,6 +89,7 @@ export async function updateProject(
   Object.assign(next, textStatsOf('project', next));
   const { id: _id, ...patch } = next;
   await projects.update(ctx.userId, id, patch);
+  await recordAction(ctx, 'project.edited', id);
   notifyChange(ctx, 'project', id);
   return toProject(next);
 }

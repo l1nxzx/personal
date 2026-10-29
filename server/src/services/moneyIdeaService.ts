@@ -13,6 +13,7 @@ import { buildSearchTerms } from '../lib/text.js';
 import { notifyChange, type Ctx } from './context.js';
 import { createProject } from './projectService.js';
 import { textStatsOf } from './textStats.js';
+import { recordAction } from './activityService.js';
 
 export const toSummary = (r: ideas.MoneyIdeaSummaryRecord): MoneyIdeaSummary => ({
   id: r.id,
@@ -85,6 +86,7 @@ export async function createIdea(ctx: Ctx, input: CreateMoneyIdeaRequest): Promi
   };
   await ideas.create(ctx.userId, record);
   notifyChange(ctx, 'moneyIdea', record.id);
+  await recordAction(ctx, 'moneyIdea.created', record.id);
   return toIdea(record);
 }
 
@@ -128,6 +130,7 @@ export async function updateIdea(
     notifyChange(ctx, 'link');
   }
   notifyChange(ctx, 'moneyIdea', id);
+  await recordAction(ctx, 'moneyIdea.edited', id);
   return toIdea(next);
 }
 

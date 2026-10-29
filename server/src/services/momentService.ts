@@ -5,6 +5,7 @@ import { buildSearchTerms } from '../lib/text.js';
 import { notifyChange, type Ctx } from './context.js';
 import { describe } from './linkService.js';
 import { textStatsOf } from './textStats.js';
+import { recordAction } from './activityService.js';
 
 export const toMoment = (r: moments.MomentRecord): Moment => ({
   id: r.id,
@@ -34,6 +35,7 @@ export async function addMoment(ctx: Ctx, input: CreateMomentRequest): Promise<M
   };
   await moments.create(ctx.userId, record);
   notifyChange(ctx, 'moment', record.id);
+  await recordAction(ctx, 'moment.created', record.id);
   return toMoment(record);
 }
 

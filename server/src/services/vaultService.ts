@@ -11,6 +11,7 @@ import * as vault from '../data/vaultRepo.js';
 import { AppError, conflict, notFound, unauthorized } from '../lib/errors.js';
 import { verifyPassword } from '../lib/password.js';
 import { notifyChange, type Ctx } from './context.js';
+import { recordAction } from './activityService.js';
 
 /**
  * The Private Vault, server side. The server never sees a passphrase, a key or any plaintext:
@@ -81,6 +82,8 @@ export async function createItem(ctx: Ctx, input: VaultItemInput): Promise<Vault
   };
   await vault.createItem(ctx.userId, item);
   notifyChange(ctx, 'vault', item.id);
+  // Only that something was stored or changed, never what (it is encrypted anyway).
+  await recordAction(ctx, 'vault.created', item.id);
   return item;
 }
 
@@ -100,6 +103,7 @@ export async function updateItem(ctx: Ctx, id: string, input: VaultItemInput): P
     );
   }
   notifyChange(ctx, 'vault', id);
+  await recordAction(ctx, 'vault.edited', id);
   return result.item;
 }
 

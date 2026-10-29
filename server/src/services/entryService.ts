@@ -22,6 +22,7 @@ import { anchorKeys } from '../lib/anchors.js';
 import { syncTextLinks } from './linkService.js';
 import { notifyChange, type Ctx } from './context.js';
 import { textStatsOf } from './textStats.js';
+import { recordAction } from './activityService.js';
 
 const journalSortKey = (date: string, createdAt: string, id: string) =>
   `${date}|${createdAt}|${id}`;
@@ -190,6 +191,7 @@ export async function createEntry(
   await entries.create(ctx.userId, kind, record);
   notifyChange(ctx, kind, id);
   if (anchorKeys(record.body).size) await syncTextLinks(ctx, { type: kind, id }, record.body);
+  await recordAction(ctx, `${kind}.created`, id);
   return toEntry(kind, record);
 }
 
@@ -206,19 +208,27 @@ export async function getEntry(ctx: Ctx, kind: EntryKind, id: string): Promise<E
  *   with the text being edited in an open editor
  * - flags (pinned, archived): neither
  */
-export function updateEntry(
+export async function updateEntry(
   ctx: Ctx,
   kind: EntryKind,
   id: string,
   input: UpdateEntryRequest,
 ): Promise<EntryMeta> {
   const content = [input.title, input.body, input.date, input.tags].some((v) => v !== undefined);
-  if (kind === 'note' && input.topic) {
-    return canonicalTopic(ctx, input.topic).then(({ topic }) =>
-      updateEntryWith(ctx, kind, id, input.rev ?? null, () => ({ ...input, topic }), content),
+  const details =
+    kind === 'note' &&
+    [input.noteType, input.topic, input.sources, input.perspectives, input.decision].some(
+      (v) => v !== undefined,
     );
-  }
-  return updateEntryWith(ctx, kind, id, input.rev ?? null, () => input, content);
+  const meta =
+    kind === 'note' && input.topic
+      ? await canonicalTopic(ctx, input.topic).then(({ topic }) =>
+          updateEntryWith(ctx, kind, id, input.rev ?? null, () => ({ ...input, topic }), content),
+        )
+      : await updateEntryWith(ctx, kind, id, input.rev ?? null, () => input, content);
+  // Pinning and archiving are not editing.
+  if (content || details) await recordAction(ctx, `${kind}.edited`, id);
+  return meta;
 }
 
 /** `makeInput` runs inside the transaction, so it can build on the stored entry atomically. */
@@ -428,5 +438,6 @@ export async function appendToJournalDay(
   await updateEntryWith(ctx, 'journal', target.id, null, (current) => ({
     body: current.body.trim() ? `${current.body.trimEnd()}\n\n*${time}* — ${text}` : text,
   }));
+  await recordAction(ctx, 'journal.edited', target.id);
   return target.id;
 }

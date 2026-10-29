@@ -1,9 +1,9 @@
 import { db } from '../config/firebase.js';
 
 /**
- * Time the site was open in a visible tab. One document per local day
- * (users/{uid}/activity/{YYYY-MM-DD}) and the running totals in meta/activity, always written
- * together in one transaction, so the totals equal the sum of the days.
+ * Time the site was open in a visible tab, and meaningful things done. One document per local
+ * day (users/{uid}/activity/{YYYY-MM-DD}) and the running totals in meta/activity, always
+ * written together in one transaction, so the totals equal the sum of the days.
  */
 export interface ActivityDayRecord {
   date: string;
@@ -12,6 +12,23 @@ export interface ActivityDayRecord {
   sessions: number;
   firstAt: string;
   lastAt: string;
+  /** Time and visits per section (`UsageSection`); time sent without a section is in none. */
+  sections?: Record<string, SectionDayRecord>;
+  /** Ids of the items each action (`UsageAction`) was done to that day; each id once. */
+  actions?: Record<string, string[]>;
+}
+
+export interface SectionDayRecord {
+  seconds: number;
+  visits: number;
+  lastAt: string;
+}
+
+export interface MonthRecord {
+  seconds: number;
+  days: number;
+  sections?: Record<string, { seconds: number; visits: number }>;
+  actions?: Record<string, number>;
 }
 
 export interface ActivityMetaRecord {
@@ -22,7 +39,13 @@ export interface ActivityMetaRecord {
   firstActiveAt: string | null;
   lastActiveAt: string | null;
   /** `YYYY-MM` → totals of that month. */
-  months: Record<string, { seconds: number; days: number }>;
+  months: Record<string, MonthRecord>;
+  /** All-time totals per section. */
+  sections?: Record<string, SectionDayRecord>;
+  /** Start of the first stretch recorded with a section. */
+  sectionsSince?: string | null;
+  /** All-time counts per action. */
+  actions?: Record<string, number>;
   /** The latest sessions, oldest first; times in ms since the epoch (server clock). */
   recentSessions: { startedAt: number; lastAt: number; seconds: number }[];
   /** Stretches counted in the last few minutes (ms, merged), so overlapping time counts once. */
@@ -82,4 +105,14 @@ export async function rebuild(
       ),
     );
   });
+}
+
+/** The stored days from `from` to `to` (local dates, inclusive). One read per stored day. */
+export async function listDays(
+  uid: string,
+  from: string,
+  to: string,
+): Promise<ActivityDayRecord[]> {
+  const snap = await daysCol(uid).where('date', '>=', from).where('date', '<=', to).get();
+  return snap.docs.map((d) => d.data() as ActivityDayRecord);
 }

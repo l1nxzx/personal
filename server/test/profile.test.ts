@@ -187,7 +187,9 @@ describe('active time', () => {
     expect(a.totalSeconds).toBe(105);
     expect(a.days).toBe(1);
     expect(a.sessions).toBe(1);
-    expect(a.months).toEqual([{ month: '2026-10', seconds: 105, days: 1 }]);
+    expect(a.months).toEqual([
+      { month: '2026-10', seconds: 105, days: 1, sections: [], actions: [] },
+    ]);
     expect(a.lastActiveAt).toBe(new Date(NOW).toISOString());
   });
 

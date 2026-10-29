@@ -14,6 +14,7 @@ import { notFound } from '../lib/errors.js';
 import { buildSearchTerms } from '../lib/text.js';
 import { notifyChange, type Ctx } from './context.js';
 import { sourceKey } from './incomeService.js';
+import { recordAction } from './activityService.js';
 
 const sortKey = (date: string, createdAt: string, id: string) => `${date}|${createdAt}|${id}`;
 const cleanCategory = (c: string | undefined) => (c ?? '').trim().replace(/\s+/g, ' ').slice(0, 60);
@@ -71,6 +72,7 @@ export async function addExpense(ctx: Ctx, input: CreateExpenseRequest): Promise
   };
   await expenses.create(ctx.userId, record);
   notifyChange(ctx, 'expense', id);
+  await recordAction(ctx, 'expense.created', id);
   return toExpense(record);
 }
 
@@ -176,6 +178,7 @@ export async function addSubscription(
   record.searchTerms = subTerms(record);
   await expenses.createSubscription(ctx.userId, record);
   notifyChange(ctx, 'subscription', record.id);
+  await recordAction(ctx, 'subscription.created', record.id);
   return toSubscription(record);
 }
 
@@ -241,5 +244,7 @@ export async function recordPayment(
   const subscription = await updateSubscription(ctx, id, {
     nextRenewal: advance(sub.nextRenewal ?? input.date, sub.frequency),
   });
+  // Each payment is its own expense, so two payments on one day count twice.
+  await recordAction(ctx, 'subscription.paid', expense.id);
   return { expense, subscription };
 }
