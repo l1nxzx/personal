@@ -788,6 +788,9 @@ export interface ActivityMonth {
   month: string;
   seconds: number;
   days: number;
+  /** Time and visits per section that month (only sections with time). */
+  sections: { section: UsageSection; seconds: number; visits: number }[];
+  actions: ActionCount[];
 }
 
 /** Time the site was open in a visible tab, recorded since this feature existed. */
@@ -803,6 +806,104 @@ export interface ActivityStats {
   lastActiveAt: string | null;
   /** Newest first. */
   months: ActivityMonth[];
+  /** All-time time and visits per section (sections with any time), most time first. */
+  sections: SectionUsage[];
+  /** When time started being recorded per section; null until then. */
+  sectionsSince: string | null;
+  /** All-time counts of meaningful actions (only those that happened). */
+  actions: ActionCount[];
+}
+
+/**
+ * A part of the site whose time is recorded on its own, from the address shown (see
+ * `client/src/lib/sections.ts`). Dialogs, panels and query strings never make a section.
+ */
+export type UsageSection =
+  | 'home'
+  | 'inbox'
+  | 'journal'
+  | 'writing'
+  | 'thinking'
+  | 'reviews'
+  | 'timeline'
+  | 'ideas'
+  | 'money'
+  | 'expenses'
+  | 'moneyIdeas'
+  | 'tasks'
+  | 'projects'
+  | 'library'
+  | 'documents'
+  | 'vault'
+  | 'profile'
+  | 'settings'
+  | 'other';
+
+export interface SectionUsage {
+  section: UsageSection;
+  seconds: number;
+  /** Arrivals in the section (see `ActivityBeat.visit`). */
+  visits: number;
+  /** End of the latest recorded time there. */
+  lastAt: string | null;
+}
+
+/**
+ * Meaningful things done, counted when they succeed on the server. Each item counts at most
+ * once per action per day ("edited" = items changed that day, not saves), and an item edited on
+ * the day it was created counts only as created.
+ */
+export type UsageAction =
+  | 'capture.created'
+  | 'capture.filed'
+  | 'journal.created'
+  | 'journal.edited'
+  | 'writing.created'
+  | 'writing.edited'
+  | 'note.created'
+  | 'note.edited'
+  | 'review.created'
+  | 'review.edited'
+  | 'moment.created'
+  | 'project.created'
+  | 'project.edited'
+  | 'task.created'
+  | 'task.completed'
+  | 'book.created'
+  | 'book.edited'
+  | 'document.uploaded'
+  | 'document.organized'
+  | 'folder.created'
+  | 'income.created'
+  | 'expense.created'
+  | 'subscription.created'
+  | 'subscription.paid'
+  | 'moneyIdea.created'
+  | 'moneyIdea.edited'
+  | 'vault.created'
+  | 'vault.edited'
+  | 'link.created';
+
+export interface ActionCount {
+  action: UsageAction;
+  count: number;
+}
+
+/** One local day of recorded use. Days with nothing recorded are left out. */
+export interface UsageDay {
+  /** Local date (of the device for time, of the request for actions). */
+  date: LocalDate;
+  seconds: number;
+  sessions: number;
+  /** Time recorded before sections were tracked is in `seconds` but in no section. */
+  sections: { section: UsageSection; seconds: number; visits: number }[];
+  actions: ActionCount[];
+}
+
+export interface UsageRange {
+  from: LocalDate;
+  to: LocalDate;
+  days: UsageDay[];
 }
 
 export interface ProfileStats {
@@ -837,6 +938,14 @@ export interface ActivityBeat {
   ago: number;
   /** The browser's local date when the stretch ended. */
   date: LocalDate;
+  /** The section on screen the whole stretch (absent from tabs older than section tracking). */
+  section?: UsageSection;
+  /**
+   * The stretch begins a visit: the section was entered from another one, or the site was
+   * back in view after 30 minutes or more. Reloading, opening another tab of the same section
+   * or switching back to this tab soon after never does.
+   */
+  visit?: boolean;
 }
 
 export interface ActivityRequest {

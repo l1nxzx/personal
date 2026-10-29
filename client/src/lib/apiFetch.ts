@@ -1,4 +1,5 @@
 import type { ApiErrorBody } from '../../../shared/types';
+import { today } from './dates';
 
 export const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api';
 
@@ -66,6 +67,8 @@ export async function apiFetch<T = void>(path: string, options: ApiOptions = {})
 
   const finalHeaders = new Headers(headers);
   finalHeaders.set('X-Client-Id', CLIENT_ID);
+  // Lets the server count what is done on this device's own day (the profile's usage history).
+  finalHeaders.set('X-Local-Date', today());
   let payload: BodyInit | undefined;
   if (body instanceof FormData) {
     payload = body; // the browser sets the multipart boundary

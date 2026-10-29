@@ -7,6 +7,7 @@ import * as tasks from '../data/taskRepo.js';
 import { badRequest } from '../lib/errors.js';
 import { notifyChange, type Ctx } from './context.js';
 import { textStatsOf } from './textStats.js';
+import { recordAction } from './activityService.js';
 
 const EMPTY: WeeklyReviewAnswers = {
   happened: '',
@@ -109,6 +110,7 @@ export async function saveReview(
     ...textStatsOf('review', { answers: merged }),
   };
   await reviews.save(ctx.userId, record);
+  await recordAction(ctx, current ? 'review.edited' : 'review.created', weekStart);
   return toReview(record);
 }
 

@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import type { ActivityBeat } from '../../../../shared/types';
+import { useEffect, useRef } from 'react';
+import type { ActivityBeat, UsageSection } from '../../../../shared/types';
 import { ApiError, apiFetch } from '../../lib/apiFetch';
 import { toLocalDate } from '../../lib/dates';
 import { keysWithPrefix, readJSON, removeKey, writeJSON } from '../../lib/storage';
@@ -9,12 +9,19 @@ import { keysWithPrefix, readJSON, removeKey, writeJSON } from '../../lib/storag
  * or not anyone types, clicks or scrolls — there is no idle timeout — and pauses as soon as the
  * tab is hidden (another tab, minimised, another app, screen off on phones).
  *
- * Counted time is kept as continuous stretches ("beats"), saved to localStorage every few
- * seconds and sent every minute and whenever the tab is hidden or closed. A beat that doesn't
- * get through (offline, signed out, browser closed mid-request or crashed) stays stored and is
- * sent on the next visit. Every beat has an id, so sending one twice is harmless, and the server
- * drops time already counted by another tab or device. Nothing about what is on the page or
- * typed is recorded: only how long, when, and the local date.
+ * Counted time is kept as continuous stretches ("beats"), each in one section of the site (the
+ * address on screen, `lib/sections.ts`): moving to another section ends the stretch and starts
+ * one there. Beats are saved to localStorage every few seconds and sent about once a minute and
+ * whenever the tab is hidden or closed. A beat that doesn't get through (offline, signed out,
+ * browser closed mid-request or crashed) stays stored and is sent on the next visit. Every beat
+ * has an id, so sending one twice is harmless, and the server drops time already counted by
+ * another tab or device. Nothing about what is on the page or typed is recorded: only how long,
+ * when, the local date and which section.
+ *
+ * A visit starts when a section is entered from another one, or when the site comes back into
+ * view after 30 minutes or more. Every tab notes the section it shows and when (`LAST_KEY`), so
+ * reloading, opening a second tab of the same section or switching back to this tab soon after
+ * continues the visit instead of starting another.
  */
 const TICK_MS = 5_000;
 const SEND_EVERY_MS = 60_000;
@@ -24,8 +31,12 @@ const MAX_TICK_GAP_MS = 20_000;
 const ORPHAN_AFTER_MS = 60_000;
 /** The server refuses beats older than a week. */
 const KEEP_FOR_MS = 7 * 24 * 60 * 60 * 1000;
-const MAX_PER_REQUEST = 20;
+/** Away this long, the next sight of the site starts a new visit (and session). */
+const VISIT_GAP_MS = 30 * 60 * 1000;
+const MAX_PER_REQUEST = 50;
 const PREFIX = 'activity:';
+/** Outside `PREFIX`: it is not a beat. */
+const LAST_KEY = 'activityLastSeen';
 
 interface StoredBeat {
   /** Whose time it is; another account signing in on this device never sends it. */
@@ -36,6 +47,16 @@ interface StoredBeat {
   endedAt: number;
   /** Finished; anything after it starts a new beat. */
   sealed: boolean;
+  section?: UsageSection;
+  /** The first stretch of a visit. */
+  visit?: boolean;
+}
+
+/** The section a tab of the site last showed, and when. */
+interface LastSeen {
+  uid: string;
+  section: UsageSection;
+  at: number;
 }
 
 const newId = () =>
@@ -49,11 +70,22 @@ const isBeat = (b: unknown): b is StoredBeat =>
   typeof (b as StoredBeat).ms === 'number' &&
   typeof (b as StoredBeat).endedAt === 'number';
 
-/** Starts counting for `uid`; returns a function that stops (and sends what was counted). */
-export function startActivityTracking(uid: string): () => void {
+export interface ActivityTracker {
+  /** The address on screen moved to another section. */
+  setSection: (section: UsageSection) => void;
+  /** Stops counting and sends what was counted. */
+  stop: () => void;
+}
+
+/** Starts counting for `uid`, beginning in `initial`. */
+export function startActivityTracking(uid: string, initial: UsageSection): ActivityTracker {
+  let section = initial;
   let current: StoredBeat | null = null;
   /** When visible time was last added up; null while hidden. */
   let lastTick: number | null = null;
+  /** The next stretch begins a visit. */
+  let visitPending = false;
+  let lastSentAt = Date.now();
   /** This tab's finished beats, also kept here in case localStorage is unavailable. */
   const mine = new Map<string, StoredBeat>();
   const inFlight = new Set<string>();
@@ -64,6 +96,20 @@ export function startActivityTracking(uid: string): () => void {
     removeKey(PREFIX + id);
   };
 
+  const markSeen = (now: number) =>
+    writeJSON(LAST_KEY, { uid, section, at: now } satisfies LastSeen);
+
+  /**
+   * The site is in view in `section` now: a visit starts unless this continues the last one.
+   * Only counted time marks a section as seen, so a tab started and stopped at once (a quick
+   * remount) or a section left within seconds never hides the next arrival.
+   */
+  function arrive(now: number) {
+    const last = readJSON<LastSeen>(LAST_KEY);
+    if (!last || last.uid !== uid || last.section !== section || now - last.at >= VISIT_GAP_MS)
+      visitPending = true;
+  }
+
   function seal() {
     if (!current) return;
     current.sealed = true;
@@ -71,6 +117,8 @@ export function startActivityTracking(uid: string): () => void {
       mine.set(current.id, current);
       save(current);
     } else {
+      // Too short to keep. If it opened a visit, the visit begins with the next stretch.
+      if (current.visit && current.section === section) visitPending = true;
       forget(current.id);
     }
     current = null;
@@ -84,12 +132,19 @@ export function startActivityTracking(uid: string): () => void {
     if (delta <= 0) return;
     if (delta > MAX_TICK_GAP_MS) {
       seal(); // the gap isn't counted, and a beat must be one continuous stretch
+      arrive(now);
       return;
     }
-    current ??= { uid, id: newId(), ms: 0, endedAt: now, sealed: false };
+    if (!current) {
+      current = { uid, id: newId(), ms: 0, endedAt: now, sealed: false, section };
+      if (visitPending) current.visit = true;
+      visitPending = false;
+    }
     current.ms += delta;
     current.endedAt = now;
     save(current);
+    // Only once the stretch is long enough to be kept (and its visit with it).
+    if (current.ms >= 1000) markSeen(now);
   }
 
   /** Finished beats of this account, from this tab and from tabs that are gone. */
@@ -110,6 +165,7 @@ export function startActivityTracking(uid: string): () => void {
 
   async function send(keepalive = false) {
     const now = Date.now();
+    lastSentAt = now;
     const batch = due(now);
     if (!batch.length) return;
     batch.forEach((b) => inFlight.add(b.id));
@@ -118,6 +174,8 @@ export function startActivityTracking(uid: string): () => void {
       seconds: Math.min(120, Math.round(b.ms / 1000)),
       ago: Math.max(0, Math.round((now - b.endedAt) / 1000)),
       date: toLocalDate(new Date(b.endedAt)),
+      ...(b.section && { section: b.section }),
+      ...(b.visit && { visit: true }),
     }));
     try {
       // keepalive lets the request finish while the tab closes.
@@ -136,10 +194,9 @@ export function startActivityTracking(uid: string): () => void {
     const now = Date.now();
     if (lastTick === null) lastTick = now;
     else account(now);
-    if (current && current.ms >= SEND_EVERY_MS) {
-      seal();
-      void send();
-    }
+    if (current && current.ms >= SEND_EVERY_MS) seal();
+    // About once a minute, whatever was finished meanwhile (a stretch per section visited).
+    if (now - lastSentAt >= SEND_EVERY_MS) void send();
   }
 
   function pause() {
@@ -151,28 +208,60 @@ export function startActivityTracking(uid: string): () => void {
 
   function onVisibilityChange() {
     if (document.visibilityState === 'visible') {
-      lastTick = Date.now();
+      const now = Date.now();
+      lastTick = now;
+      arrive(now);
       void send();
     } else {
       pause();
     }
   }
 
-  if (document.visibilityState === 'visible') lastTick = Date.now();
+  function setSection(next: UsageSection) {
+    if (next === section) return;
+    const visible = document.visibilityState === 'visible';
+    // The time so far belongs to the section that was on screen until now.
+    if (visible) account(Date.now());
+    seal();
+    section = next;
+    visitPending = true;
+  }
+
+  if (document.visibilityState === 'visible') {
+    lastTick = Date.now();
+    arrive(lastTick);
+  }
   void send(); // anything left from earlier visits
   const timer = window.setInterval(onTick, TICK_MS);
   document.addEventListener('visibilitychange', onVisibilityChange);
   window.addEventListener('pagehide', pause);
 
-  return () => {
-    window.clearInterval(timer);
-    document.removeEventListener('visibilitychange', onVisibilityChange);
-    window.removeEventListener('pagehide', pause);
-    pause();
+  return {
+    setSection,
+    stop: () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pagehide', pause);
+      pause();
+    },
   };
 }
 
 /** Counts active time for the signed-in user while the app shell is mounted. */
-export function useActivityTracking(uid: string | undefined) {
-  useEffect(() => (uid ? startActivityTracking(uid) : undefined), [uid]);
+export function useActivityTracking(uid: string | undefined, section: UsageSection) {
+  const tracker = useRef<ActivityTracker | null>(null);
+  const sectionRef = useRef(section);
+  sectionRef.current = section;
+
+  useEffect(() => {
+    if (!uid) return;
+    const t = startActivityTracking(uid, sectionRef.current);
+    tracker.current = t;
+    return () => {
+      tracker.current = null;
+      t.stop();
+    };
+  }, [uid]);
+
+  useEffect(() => tracker.current?.setSection(section), [section]);
 }

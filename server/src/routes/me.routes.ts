@@ -4,7 +4,12 @@ import { asyncHandler } from '../lib/asyncHandler.js';
 import { authenticate } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { requirePermission } from '../permissions.js';
-import { recordActivity } from '../services/activityService.js';
+import {
+  MAX_RANGE_DAYS,
+  recordActivity,
+  USAGE_SECTIONS,
+  usageRange,
+} from '../services/activityService.js';
 import { ctxOf } from '../services/context.js';
 import { getHome } from '../services/homeService.js';
 import { getPrefs, updatePrefs } from '../services/prefsService.js';
@@ -113,6 +118,7 @@ meRoutes.post(
 );
 
 // A tab sends a stretch at most every ~65 s of visible time; anything longer is malformed.
+// Moving between sections makes shorter stretches, so a minute can bring several.
 const activityBody = z
   .object({
     beats: z
@@ -127,18 +133,38 @@ const activityBody = z
               .min(0)
               .max(7 * 24 * 60 * 60),
             date: localDate,
+            section: z.enum(USAGE_SECTIONS).optional(),
+            visit: z.boolean().optional(),
           })
           .strict(),
       )
       .min(1)
-      .max(20),
+      .max(60),
   })
   .strict();
+
+const usageQuery = z
+  .object({ from: localDate, to: localDate })
+  .refine((q) => q.from <= q.to, 'from must not be after to')
+  .refine(
+    (q) => Date.parse(q.to) - Date.parse(q.from) <= (MAX_RANGE_DAYS - 1) * 24 * 60 * 60 * 1000,
+    `At most ${MAX_RANGE_DAYS} days at a time`,
+  );
 
 meRoutes.post(
   '/activity',
   validate({ body: activityBody }),
   asyncHandler(async (req, res) => {
     res.json(await recordActivity(ctxOf(req), req.body.beats));
+  }),
+);
+
+/** Recorded time and actions per local day, for the usage history on the profile. */
+meRoutes.get(
+  '/usage',
+  validate({ query: usageQuery }),
+  asyncHandler(async (req, res) => {
+    const { from, to } = req.query as unknown as { from: string; to: string };
+    res.json({ usage: await usageRange(ctxOf(req), from, to) });
   }),
 );

@@ -368,6 +368,9 @@ export const activityRepo = {
     );
     stores.activityMeta.set(uid, clone(meta));
   },
+  async listDays(uid: string, from: string, to: string) {
+    return [...daysOf(uid).values()].filter((d) => d.date >= from && d.date <= to).map(clone);
+  },
 };
 
 /** Test helper: the stored day records. */

@@ -1,6 +1,6 @@
 import { Suspense, useEffect } from 'react';
 import type { ReactNode } from 'react';
-import { Outlet, useMatch } from 'react-router-dom';
+import { Outlet, useLocation, useMatch } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { Skeleton, SkeletonText, skeletonWidth } from '../ui/Skeleton';
@@ -11,6 +11,7 @@ import { SearchDialog } from '../../features/search/SearchDialog';
 import { TaskDetailHost } from '../../features/tasks/TaskDetail';
 import { useRealtime } from '../../hooks/useRealtime';
 import { isMod, isTyping, useKeydown } from '../../lib/hotkeys';
+import { sectionOf } from '../../lib/sections';
 import { MobileNav } from './MobileNav';
 import { Sidebar } from './Sidebar';
 
@@ -68,7 +69,8 @@ export function AppShell({ preload }: { preload?: () => void }) {
   }, [preload]);
 
   useRealtime(true);
-  useActivityTracking(user?.id);
+  // Time is recorded for the section on screen (`lib/sections.ts`).
+  useActivityTracking(user?.id, sectionOf(useLocation().pathname));
 
   useKeydown((e) => {
     if (e.defaultPrevented) return;

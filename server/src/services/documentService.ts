@@ -9,6 +9,7 @@ import { matchesAll, normalizeTags, queryTokens } from '../lib/text.js';
 import { notifyChange, type Ctx } from './context.js';
 import { isImage, processDocumentImage } from './imageService.js';
 import { documentTerms as terms, ensureLibraryMigrated } from './libraryMigration.js';
+import { recordAction } from './activityService.js';
 
 /**
  * Shown inline in the browser. Everything else (including SVG and HTML) is download-only.
@@ -118,6 +119,7 @@ export async function uploadDocument(
     throw err;
   }
   notifyChange(ctx, 'document', id);
+  await recordAction(ctx, 'document.uploaded', id);
   return toDocument(record);
 }
 
@@ -196,6 +198,14 @@ export async function updateDocument(
   });
   if (!saved) throw notFound('This file no longer exists');
   notifyChange(ctx, 'document', id);
+  // Renamed, moved, starred or tagged.
+  if (
+    next.name !== current.name ||
+    next.folderId !== current.folderId ||
+    next.favorite !== current.favorite ||
+    next.tags.join() !== current.tags.join()
+  )
+    await recordAction(ctx, 'document.organized', id);
   return toDocument(saved);
 }
 

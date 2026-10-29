@@ -17,6 +17,8 @@ import { errorMessage } from '../../lib/apiFetch';
 import { daysBetween, formatRelativeDay, toLocalDate } from '../../lib/dates';
 import { formatSize } from '../documents/api';
 import { useProfile, useRecount } from './api';
+import { formatDuration, plural } from './format';
+import { UsageHistory } from './UsageHistory';
 
 const nf = new Intl.NumberFormat();
 const fmtDate = new Intl.DateTimeFormat(undefined, {
@@ -26,17 +28,6 @@ const fmtDate = new Intl.DateTimeFormat(undefined, {
 });
 const fmtMonth = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' });
 const fmtTime = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
-
-const plural = (n: number, word: string) => `${nf.format(n)} ${word}${n === 1 ? '' : 's'}`;
-
-/** "41 h 12 min", "12 min", "under a minute". */
-export function formatDuration(seconds: number): string {
-  if (seconds <= 0) return '0 min';
-  if (seconds < 60) return 'under a minute';
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  return h ? `${nf.format(h)} h${m ? ` ${m} min` : ''}` : `${m} min`;
-}
 
 /** "2 years, 3 months", "5 days". */
 function timeSince(iso: string, now = new Date()): string {
@@ -126,6 +117,7 @@ export default function ProfilePage() {
           <TimeSection a={profile.data.activity} />
           <WritingSection w={profile.data.writing} />
           <ContentSection c={profile.data.content} />
+          <UsageHistory activity={profile.data.activity} />
           <MonthsSection a={profile.data.activity} />
           <HowCounted />
         </>
@@ -407,7 +399,31 @@ function HowCounted() {
         </li>
         <li>
           A session is a stretch of use without a break of 30 minutes or more. Days follow the date
-          on the device you were using.
+          on the device you were using; weeks run Monday to Sunday.
+        </li>
+        <li>
+          Time per section goes to the part of the site on screen: moving from Journal to Projects
+          stops Journal’s time and starts Projects’. Dialogs such as search and Quick Capture count
+          for the page behind them. If two windows of the site are visible at once, the time counts
+          once, for whichever reported it first.
+        </li>
+        <li>
+          A visit starts when you go to a section from another one, or come back to the site after
+          30 minutes or more away. Reloading, opening a second tab of the same section or switching
+          back to this tab soon after doesn’t start another.
+        </li>
+        <li>
+          What you did counts things that succeeded on the server, not clicks: an item counts once
+          per day for each action, so a text saved a hundred times while you write is one edit, and
+          an item edited on the day it was created counts only as created. Pinning and archiving
+          aren’t edits. A Quick Capture counts as a capture and also where it was filed (a task
+          added, a journal day written); a subscription marked paid also records an expense. Counts
+          stay after an item is deleted: they are what was done, not what is kept.
+        </li>
+        <li>
+          Comparisons appear only when the earlier period was recorded in full, and partial periods
+          are compared with the same days before (this week with the same days last week). Low
+          numbers are just that: a section can matter even if it is rarely opened.
         </li>
         <li>
           Words and characters are counted in what you wrote: journal entries, writings, notes (with
@@ -416,8 +432,9 @@ function HowCounted() {
           blocks and formatting are left out. Files and the vault are never read.
         </li>
         <li>
-          Only durations, dates and counts are stored, in your own account. Nothing you read or type
-          is recorded for this, and nothing is sent anywhere else.
+          Only durations, dates, section names, counts and the ids of the items involved are stored,
+          in your own account. Nothing you read or type is recorded for this, and nothing is sent
+          anywhere else.
         </li>
       </ul>
       <div className="mt-5 flex flex-wrap items-center gap-3">

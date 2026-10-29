@@ -5,6 +5,7 @@ import * as tasks from '../data/taskRepo.js';
 import { notFound } from '../lib/errors.js';
 import { buildSearchTerms } from '../lib/text.js';
 import { notifyChange, type Ctx } from './context.js';
+import { recordAction } from './activityService.js';
 
 export const toTask = (r: tasks.TaskRecord): Task => ({
   id: r.id,
@@ -51,6 +52,7 @@ export async function createTask(ctx: Ctx, input: CreateTaskRequest): Promise<Ta
   record.searchTerms = terms(record);
   await tasks.create(ctx.userId, record);
   notifyChange(ctx, 'task', record.id);
+  await recordAction(ctx, 'task.created', record.id);
   return toTask(record);
 }
 
@@ -68,6 +70,9 @@ export async function updateTask(ctx: Ctx, id: string, input: UpdateTaskRequest)
   const { id: _id, ...patch } = next;
   await tasks.update(ctx.userId, id, patch);
   notifyChange(ctx, 'task', id);
+  // Ticking a task off again after reopening it the same day counts once.
+  if (input.status === 'done' && current.status !== 'done')
+    await recordAction(ctx, 'task.completed', id);
   return toTask(next);
 }
 

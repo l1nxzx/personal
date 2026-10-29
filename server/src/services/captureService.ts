@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type {
   Capture,
   CaptureRequest,
@@ -10,6 +11,7 @@ import { buildSearchTerms } from '../lib/text.js';
 import { notifyChange, type Ctx } from './context.js';
 import { appendToJournalDay, createEntry } from './entryService.js';
 import { createTask } from './taskService.js';
+import { recordAction } from './activityService.js';
 
 const toCapture = (r: inbox.CaptureRecord): Capture => ({
   id: r.id,
@@ -31,6 +33,14 @@ function splitFirstLine(text: string): { first: string; rest: string } {
  * task or journal files it immediately, because choosing is already the decision.
  */
 export async function capture(ctx: Ctx, input: CaptureRequest): Promise<CaptureResult> {
+  const result = await fileCapture(ctx, input);
+  // Every use of Quick Capture counts (two captures into one journal day are two). What it
+  // filed is counted where it went, too: a task created, the journal day edited.
+  await recordAction(ctx, 'capture.created', randomUUID());
+  return result;
+}
+
+async function fileCapture(ctx: Ctx, input: CaptureRequest): Promise<CaptureResult> {
   const text = input.text.trim();
   if (input.kind === 'task') {
     const { first, rest } = splitFirstLine(text);
@@ -93,10 +103,11 @@ export async function convertCapture(
     });
     result = { destination: 'writing', id: entry.id };
   } else {
-    result = await capture(ctx, { ...input, text: item.text, kind: input.to });
+    result = await fileCapture(ctx, { ...input, text: item.text, kind: input.to });
   }
 
   await inbox.remove(ctx.userId, id);
   notifyChange(ctx, 'inbox', id);
+  await recordAction(ctx, 'capture.filed', id);
   return result;
 }

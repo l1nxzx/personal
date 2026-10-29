@@ -13,6 +13,7 @@ import { buildSearchTerms } from '../lib/text.js';
 import { notifyChange, type Ctx } from './context.js';
 import { createEntry } from './entryService.js';
 import { textStatsOf } from './textStats.js';
+import { recordAction } from './activityService.js';
 
 export const toSummary = (r: books.BookSummaryRecord): BookSummary => ({
   id: r.id,
@@ -61,6 +62,7 @@ export async function createBook(ctx: Ctx, input: CreateBookRequest): Promise<Bo
   };
   await books.create(ctx.userId, record);
   notifyChange(ctx, 'book', record.id);
+  await recordAction(ctx, 'book.created', record.id);
   return toBook(record);
 }
 
@@ -99,6 +101,7 @@ export async function updateBook(
   const { id: _id, ...patch } = next;
   await books.update(ctx.userId, id, patch);
   notifyChange(ctx, 'book', id);
+  await recordAction(ctx, 'book.edited', id);
   return toBook(next);
 }
 
