@@ -238,7 +238,6 @@ function TimeSection({ a }: { a: ActivityStats }) {
     a.longestSessionSeconds > 0 && `longest session ${formatDuration(a.longestSessionSeconds)}`,
     a.days > 0 && `about ${formatDuration(a.totalSeconds / a.days)} on an active day`,
   ].filter(Boolean);
-  const since = a.firstActiveAt && fmtDate.format(new Date(a.firstActiveAt));
   return (
     <Section id="profile-time" title="Time here">
       <div className="grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-3">
@@ -251,11 +250,6 @@ function TimeSection({ a }: { a: ActivityStats }) {
           {facts.join(' · ').replace(/^./, (ch) => ch.toUpperCase())}
         </p>
       )}
-      <p className="mt-2 text-sm text-ink-faint">
-        {since
-          ? `Counted while this site is open in a visible tab, since ${since}. Visits before that weren’t recorded.`
-          : 'Counted from now on, while this site is open in a visible tab.'}
-      </p>
     </Section>
   );
 }
@@ -266,7 +260,7 @@ function WritingSection({ w }: { w: ProfileStats['writing'] }) {
     <Section id="profile-writing" title="Writing">
       <div className="grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-3">
         <Figure large label="Words written" value={nf.format(w.words)} />
-        <Figure label="Characters" value={nf.format(w.chars)} note="not counting spaces" />
+        <Figure label="Characters" value={nf.format(w.chars)} />
         <Figure label="Written entries" value={nf.format(w.entries)} />
       </div>
       {rows.length ? (
@@ -387,62 +381,10 @@ function HowCounted() {
       (err: unknown) => toast({ message: errorMessage(err), tone: 'error' }),
     );
   return (
-    <Section id="profile-how" title="How this is counted">
-      <ul className="max-w-[43rem] list-disc space-y-2 pl-5 text-sm text-ink-muted marker:text-ink-faint">
-        <li>
-          Active time is how long this site was open in a visible browser tab, whether or not you
-          were typing or clicking. It pauses when the tab is hidden, the window is minimised or you
-          switch to another app, and time in two tabs or on two devices at once counts once. It
-          shows how long the site was open, not how long anyone looked at it.
-        </li>
-        <li>
-          A session is a stretch of use without a break of 30 minutes or more. Days follow the date
-          on the device you were using; weeks run Monday to Sunday.
-        </li>
-        <li>
-          Time per section goes to the part of the site on screen: moving from Journal to Projects
-          stops Journal’s time and starts Projects’. Dialogs such as search and Quick Capture count
-          for the page behind them. If two windows of the site are visible at once, the time counts
-          once, for whichever reported it first.
-        </li>
-        <li>
-          A visit starts when you go to a section from another one, or come back to the site after
-          30 minutes or more away. Reloading, opening a second tab of the same section or switching
-          back to this tab soon after doesn’t start another.
-        </li>
-        <li>
-          What you did counts things that succeeded on the server, not clicks: an item counts once
-          per day for each action, so a text saved a hundred times while you write is one edit, and
-          an item edited on the day it was created counts only as created. Pinning and archiving
-          aren’t edits. A Quick Capture counts as a capture and also where it was filed (a task
-          added, a journal day written); a subscription marked paid also records an expense. Counts
-          stay after an item is deleted: they are what was done, not what is kept.
-        </li>
-        <li>
-          Comparisons appear only when the earlier period was recorded in full, and partial periods
-          are compared with the same days before (this week with the same days last week). Low
-          numbers are just that: a section can matter even if it is rarely opened.
-        </li>
-        <li>
-          Words and characters are counted in what you wrote: journal entries, writings, notes (with
-          beliefs and decisions), weekly reviews, timeline moments, book notes, project descriptions
-          and money-making ideas. Titles, tags, sources, quoted passages, earlier versions, code
-          blocks and formatting are left out. Files are never read.
-        </li>
-        <li>
-          Only durations, dates, section names, counts and the ids of the items involved are stored,
-          in your own account. Nothing you read or type is recorded for this, and nothing is sent
-          anywhere else.
-        </li>
-      </ul>
-      <div className="mt-5 flex flex-wrap items-center gap-3">
-        <Button size="sm" onClick={() => void run()} busy={recount.isPending}>
-          Count again
-        </Button>
-        <span className="text-2xs text-ink-faint">
-          Recounts every item from scratch. The totals above are already kept up to date.
-        </span>
-      </div>
-    </Section>
+    <div className="mt-12">
+      <Button size="sm" onClick={() => void run()} busy={recount.isPending}>
+        Count again
+      </Button>
+    </div>
   );
 }
