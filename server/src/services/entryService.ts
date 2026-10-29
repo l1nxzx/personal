@@ -18,6 +18,8 @@ import * as links from '../data/linkRepo.js';
 import * as versions from '../data/versionRepo.js';
 import { AppError, badRequest, notFound } from '../lib/errors.js';
 import { buildSearchTerms, excerpt, normalizeTags, wordCount } from '../lib/text.js';
+import { anchorKeys } from '../lib/anchors.js';
+import { syncTextLinks } from './linkService.js';
 import { notifyChange, type Ctx } from './context.js';
 import { textStatsOf } from './textStats.js';
 
@@ -187,6 +189,7 @@ export async function createEntry(
   };
   await entries.create(ctx.userId, kind, record);
   notifyChange(ctx, kind, id);
+  if (anchorKeys(record.body).size) await syncTextLinks(ctx, { type: kind, id }, record.body);
   return toEntry(kind, record);
 }
 
@@ -227,13 +230,18 @@ async function updateEntryWith(
   makeInput: (current: entries.EntryRecord) => UpdateEntryRequest,
   contentChange = true,
 ): Promise<EntryMeta> {
+  let bodyBefore: string | null = null;
+  const withBefore = (current: entries.EntryRecord) => {
+    bodyBefore = current.body;
+    return makeInput(current);
+  };
   const result = await entries.update(
     ctx.userId,
     kind,
     id,
     expectedRev,
     (current) => {
-      const input = makeInput(current);
+      const input = withBefore(current);
       const flags = {
         pinned: input.pinned ?? current.pinned,
         archived: input.archived ?? current.archived,
@@ -293,6 +301,11 @@ async function updateEntryWith(
     });
   }
   notifyChange(ctx, kind, id);
+  // Linked words added or removed: keep the entry's links to those files in step.
+  const before = anchorKeys(bodyBefore ?? '');
+  const after = anchorKeys(result.record.body);
+  if (before.size !== after.size || [...after].some((k) => !before.has(k)))
+    await syncTextLinks(ctx, { type: kind, id }, result.record.body);
   return toMeta(kind, result.record);
 }
 

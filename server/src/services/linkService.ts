@@ -7,6 +7,7 @@ import * as links from '../data/linkRepo.js';
 import * as projects from '../data/projectRepo.js';
 import * as moneyIdeas from '../data/moneyIdeaRepo.js';
 import * as tasks from '../data/taskRepo.js';
+import { anchorKeys } from '../lib/anchors.js';
 import { badRequest, notFound } from '../lib/errors.js';
 import { notifyChange, type Ctx } from './context.js';
 import { folderNames } from './folderService.js';
@@ -100,7 +101,12 @@ export async function describe(
 
 export async function listLinks(ctx: Ctx, ref: Ref): Promise<LinkedItem[]> {
   const key = refKey(ref);
-  const records = await links.listFor(ctx.userId, key);
+  let records = await links.listFor(ctx.userId, key);
+  // An entry's list is checked against its text (cleans up links left from before this sync).
+  if (ref.type === 'journal' || ref.type === 'writing' || ref.type === 'note') {
+    const entry = await entries.get(ctx.userId, ref.type, ref.id);
+    if (entry) records = await syncTextLinks(ctx, ref, entry.body, records);
+  }
   const others = new Map<string, 'out' | 'in'>();
   for (const l of records) {
     const otherKey = l.from === key ? l.to : l.from;
@@ -120,8 +126,52 @@ export async function addLink(ctx: Ctx, from: Ref, to: Ref): Promise<void> {
   const info = await describe(ctx.userId, [from, to]);
   if (!info.has(refKey(from)) || !info.has(refKey(to)))
     throw notFound('One of these items no longer exists');
-  await links.add(ctx.userId, refKey(from), refKey(to));
+  await links.add(ctx.userId, refKey(from), refKey(to), 'manual');
   notifyChange(ctx, 'link');
+}
+
+/**
+ * Links stored without a `source` after linked words existed (they shipped at this moment)
+ * were made by the text; older ones were added by hand and are never touched.
+ */
+const TEXT_LINKS_SINCE = '2026-10-29T11:02:47.000Z';
+const fromText = (l: links.LinkRecord) =>
+  l.source === 'text' || (!l.source && l.createdAt >= TEXT_LINKS_SINCE);
+
+/**
+ * Keeps an entry's links to files and folders in step with the words linked in its text:
+ * every file or folder it links words to is linked to the entry (so the file lists it too),
+ * and one whose words are all gone is unlinked again, unless it was linked by hand.
+ * Returns the entry's link records as they are afterwards.
+ */
+export async function syncTextLinks(
+  ctx: Ctx,
+  entry: Ref,
+  body: string,
+  records?: links.LinkRecord[],
+): Promise<links.LinkRecord[]> {
+  const self = refKey(entry);
+  const anchored = anchorKeys(body);
+  const current = records ?? (await links.listFor(ctx.userId, self));
+  const other = (l: links.LinkRecord) => (l.from === self ? l.to : l.from);
+  const stale = current.filter((l) => {
+    const key = other(l);
+    return /^(document|folder):/.test(key) && !anchored.has(key) && fromText(l);
+  });
+  const linked = new Set(current.map(other));
+  const missing = [...anchored].filter((key) => !linked.has(key));
+  if (!stale.length && !missing.length) return current;
+
+  await Promise.all([
+    ...stale.map((l) => links.remove(ctx.userId, l.from, l.to)),
+    ...missing.map((key) => links.add(ctx.userId, self, key, 'text')),
+  ]);
+  notifyChange(ctx, 'link');
+  const now = new Date().toISOString();
+  return [
+    ...current.filter((l) => !stale.includes(l)),
+    ...missing.map((key) => ({ from: self, to: key, createdAt: now, source: 'text' as const })),
+  ];
 }
 
 /** Removes the link in both directions (lists show them as one connection). */

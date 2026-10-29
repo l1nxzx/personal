@@ -315,8 +315,8 @@ export const versionRepo = {
 const links = (uid: string) => bucket(stores.links, uid);
 
 export const linkRepo = {
-  async add(uid: string, from: string, to: string) {
-    links(uid).set(`${from}__${to}`, { from, to, createdAt: new Date().toISOString() });
+  async add(uid: string, from: string, to: string, source: 'manual' | 'text') {
+    links(uid).set(`${from}__${to}`, { from, to, createdAt: new Date().toISOString(), source });
   },
   async remove(uid: string, from: string, to: string) {
     links(uid).delete(`${from}__${to}`);
@@ -329,6 +329,10 @@ export const linkRepo = {
   },
   /** Test helper. */
   count: (uid: string) => links(uid).size,
+  /** Test helper: a link as stored before `source` was recorded. */
+  seedLegacy(uid: string, from: string, to: string, createdAt: string) {
+    links(uid).set(`${from}__${to}`, { from, to, createdAt });
+  },
 };
 
 // ---------------------------------------------------------------- tasks

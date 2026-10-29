@@ -8,13 +8,25 @@ export interface LinkRecord {
   from: string;
   to: string;
   createdAt: string;
+  /**
+   * `manual`: added with "Link". `text`: kept in step with linked words in an entry's text,
+   * so it goes when they do. Missing on links stored before this was recorded.
+   */
+  source?: 'manual' | 'text';
 }
 
 const col = (uid: string) => db().collection('users').doc(uid).collection('links');
 const docId = (from: string, to: string) => `${from}__${to}`.replace(/\//g, '_');
 
-export async function add(uid: string, from: string, to: string): Promise<void> {
-  await col(uid).doc(docId(from, to)).set({ from, to, createdAt: new Date().toISOString() });
+export async function add(
+  uid: string,
+  from: string,
+  to: string,
+  source: 'manual' | 'text',
+): Promise<void> {
+  await col(uid)
+    .doc(docId(from, to))
+    .set({ from, to, createdAt: new Date().toISOString(), source });
 }
 
 export async function remove(uid: string, from: string, to: string): Promise<void> {

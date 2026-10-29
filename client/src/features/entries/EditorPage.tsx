@@ -39,7 +39,6 @@ import { ENTRY_LIST } from '../../lib/routes';
 import { readJSON, writeJSON } from '../../lib/storage';
 import { anchorsIn, anchorUrl, type AnchorRef } from '../../lib/anchors';
 import { FilePicker } from '../library/FilePicker';
-import { useLinkMutations } from '../links/api';
 import { LinksPanel } from '../links/LinksPanel';
 import { usePrefs } from '../me/api';
 import { useDeleteEntry, useEntry, usePatchEntryMeta, useSetEntryFlags } from './api';
@@ -285,7 +284,17 @@ function Editor({
   const [metaOpen, setMetaOpen] = useState(false);
   // Linking words to a file: the selection is remembered while the picker is open.
   const [filePick, setFilePick] = useState<{ range: TextRange; words: string } | null>(null);
-  const { add: addLink } = useLinkMutations();
+  // When a save adds or removes linked words, the server links or unlinks those files: refresh.
+  const anchorSig = anchorsIn(ed.fields.body)
+    .map((a) => `${a.ref.type}:${a.ref.id}`)
+    .sort()
+    .join(' ');
+  const savedAnchors = useRef(anchorSig);
+  useEffect(() => {
+    if (ed.status !== 'saved' || anchorSig === savedAnchors.current) return;
+    savedAnchors.current = anchorSig;
+    void qc.invalidateQueries({ queryKey: ['links'] });
+  }, [ed.status, anchorSig, qc]);
   const [momentOpen, setMomentOpen] = useState(false);
   const [showFormat, setShowFormat] = useState(
     () => readJSON<boolean>('editor:formatbar') ?? false,
@@ -347,15 +356,9 @@ function Editor({
     const pick = filePick;
     setFilePick(null);
     if (!pick) return;
+    // Saving the text also links the whole entry to the file (the server keeps those links in
+    // step with the linked words, and removes them again when the words go).
     editorRef.current?.linkRange(pick.range, anchorUrl(ref), name);
-    // Also link the whole entry, so the file lists it too ("Linked" works both ways).
-    void (ed.id ? Promise.resolve(ed.id) : ed.ensureCreated()).then((id) => {
-      if (!id) return;
-      addLink.mutate(
-        { from: { type: kind, id }, to: ref },
-        { onError: (err) => toast({ message: errorMessage(err), tone: 'error' }) },
-      );
-    });
     toast({ message: `Linked ${pick.words ? `“${pick.words}”` : 'it'} to ${name}` });
   };
   // Pressing a link button on words that already have that kind of link removes it.
