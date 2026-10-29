@@ -1,12 +1,12 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import type { ActivityStats, UsageAction, UsageDay, UsageSection } from '../../../../shared/types';
+import type { ActivityStats, UsageDay, UsageSection } from '../../../../shared/types';
 import { ErrorNote } from '../../components/ui/misc';
 import { Skeleton, SkeletonBlock, SkeletonText } from '../../components/ui/Skeleton';
 import { errorMessage } from '../../lib/apiFetch';
 import { cn } from '../../lib/cn';
-import { addDays, formatRelativeDay, parseLocalDate, toLocalDate, today } from '../../lib/dates';
-import { SECTION_ORDER, SECTIONS } from '../../lib/sections';
+import { addDays, parseLocalDate, toLocalDate, today } from '../../lib/dates';
+import { SECTIONS } from '../../lib/sections';
 import { readJSON, writeJSON } from '../../lib/storage';
 import { useUsage } from './api';
 import { formatDuration, formatNumber, formatTick, plural } from './format';
@@ -42,11 +42,6 @@ const fmtDayLong = new Intl.DateTimeFormat(undefined, {
 const fmtShort = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
 const fmtMonth = new Intl.DateTimeFormat(undefined, { month: 'short' });
 const fmtMonthLong = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' });
-const fmtDate = new Intl.DateTimeFormat(undefined, {
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-});
 
 const dayLabel = (d: string) => fmtDay.format(parseLocalDate(d));
 const monthDate = (m: string) => parseLocalDate(`${m}-01`);
@@ -146,8 +141,6 @@ function PeriodView({
     !!prev && period.comparable && recordedThroughout(period.prev!.from, activity.firstActiveAt);
   const sectionsComparable =
     !!prev && period.comparable && recordedThroughout(period.prev!.from, activity.sectionsSince);
-  const started = activity.sectionsSince && toLocalDate(new Date(activity.sectionsSince));
-
   return (
     <div className={cn('transition-opacity', stale && 'opacity-60')}>
       <Summary
@@ -157,13 +150,6 @@ function PeriodView({
         comparable={timeComparable}
         days={days}
       />
-      {!all && started && started > period.from! && (
-        <p className="mt-3 text-sm text-ink-faint">
-          Time per section and what you did are recorded from{' '}
-          {fmtDate.format(parseLocalDate(started))}; earlier days in this period show only the total
-          time, if any.
-        </p>
-      )}
       {all ? (
         activity.months.length > 1 && <MonthChart activity={activity} />
       ) : period.from !== period.to ? (
@@ -171,7 +157,6 @@ function PeriodView({
       ) : null}
 
       <WhereTimeGoes
-        period={period}
         totals={totals}
         prev={sectionsComparable ? prev : null}
         activity={activity}
@@ -224,9 +209,8 @@ function Summary({
         {[
           prev &&
             period.prev &&
-            (comparable || period.key === 'today'
-              ? `${period.key === 'today' ? 'Yesterday' : `Compared with ${period.prev.label}`}: ${formatDuration(prev.seconds)}${diff ? ` (${diff})` : ''}`
-              : `No comparison with ${period.prev.label}: it wasn’t recorded in full`),
+            (comparable || period.key === 'today') &&
+            `${period.key === 'today' ? 'Yesterday' : `Compared with ${period.prev.label}`}: ${formatDuration(prev.seconds)}${diff ? ` (${diff})` : ''}`,
           busiest &&
             `busiest day ${fmtDayLong.format(parseLocalDate(busiest.date))}, ${formatDuration(busiest.seconds)}`,
         ]
@@ -475,28 +459,13 @@ function MonthChart({ activity }: { activity: ActivityStats }) {
 
 // ---------------------------------------------------------------- sections
 
-/** "3 started · 5 edited" for what was done in a section. */
-function actionSummary(section: UsageSection, actions: Map<UsageAction, number>): string {
-  return ACTION_ORDER.filter((a) => ACTIONS[a].section === section && (actions.get(a) ?? 0) > 0)
-    .map((a) => `${formatNumber(actions.get(a)!)} ${ACTIONS[a].short}`)
-    .join(' · ');
-}
-
-function lastVisit(iso: string | null | undefined): string {
-  if (!iso) return 'not opened since this was recorded';
-  const day = formatRelativeDay(toLocalDate(new Date(iso)));
-  return `last opened ${['Today', 'Yesterday'].includes(day) ? day.toLowerCase() : day}`;
-}
-
 function WhereTimeGoes({
-  period,
   totals,
   prev,
   activity,
   days,
   now,
 }: {
-  period: Period;
   totals: Totals;
   prev: Totals | null;
   activity: ActivityStats;
@@ -505,12 +474,9 @@ function WhereTimeGoes({
 }) {
   const weeks = weekSeries(days, now);
   const started = activity.sectionsSince && toLocalDate(new Date(activity.sectionsSince));
-  const lastAt = new Map(activity.sections.map((s) => [s.section, s.lastAt]));
   const rows = [...totals.sections.entries()]
     .filter(([, t]) => t.seconds > 0)
     .sort((a, b) => b[1].seconds - a[1].seconds);
-  const unused = SECTION_ORDER.filter((s) => s !== 'other' && !totals.sections.get(s)?.seconds);
-  const untracked = totals.seconds - totals.sectionSeconds;
   const trendMax = Math.max(
     1,
     ...weeks.flatMap((w) => [...w.totals.sections.values()].map((t) => t.seconds)),
@@ -519,12 +485,8 @@ function WhereTimeGoes({
   return (
     <div className="mt-10">
       <h3 className="mb-1 text-sm font-medium text-ink">Where the time goes</h3>
-      {!activity.sectionsSince ? (
-        <p className="py-3 text-sm text-ink-faint">
-          Time per section is recorded from now on. Use the site for a while and it shows here.
-        </p>
-      ) : !rows.length ? (
-        <p className="py-3 text-sm text-ink-faint">No time per section recorded in this period.</p>
+      {!rows.length ? (
+        <p className="py-3 text-sm text-ink-faint">Nothing in this period.</p>
       ) : (
         <table className="w-full text-sm">
           <thead>
@@ -547,7 +509,6 @@ function WhereTimeGoes({
               const info = SECTIONS[section];
               const share = totals.sectionSeconds ? t.seconds / totals.sectionSeconds : 0;
               const before = prev?.sections.get(section)?.seconds ?? 0;
-              const did = actionSummary(section, totals.actions);
               return (
                 <tr key={section} className="align-top">
                   <td className="py-2.5 pr-2">
@@ -558,9 +519,6 @@ function WhereTimeGoes({
                     ) : (
                       <span className="text-ink">{info.label}</span>
                     )}
-                    <div className="mt-0.5 text-2xs text-ink-faint">
-                      {[did, lastVisit(lastAt.get(section))].filter(Boolean).join(' · ')}
-                    </div>
                   </td>
                   <td className="whitespace-nowrap py-2.5 text-right tabular-nums text-ink">
                     {formatDuration(t.seconds)}
@@ -603,28 +561,6 @@ function WhereTimeGoes({
             })}
           </tbody>
         </table>
-      )}
-      {activity.sectionsSince && rows.length > 0 && unused.length > 0 && (
-        <div className="mt-4 text-sm">
-          <p className="text-ink-muted">
-            Not opened {period.key === 'all' ? 'since this was recorded' : 'in this period'}
-          </p>
-          <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-2xs text-ink-faint">
-            {unused.map((s) => (
-              <li key={s}>
-                <span className="text-ink-muted">{SECTIONS[s].label}</span>
-                {period.key !== 'all' && lastAt.get(s) && ` · ${lastVisit(lastAt.get(s))}`}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {untracked > 59 && (
-        <p className="mt-3 text-2xs text-ink-faint">
-          {formatDuration(untracked)} of this time was recorded before time per section was, so it
-          is in the total but in no section; shares are of the{' '}
-          {formatDuration(totals.sectionSeconds)} that is.
-        </p>
       )}
     </div>
   );
@@ -686,16 +622,13 @@ function WhatYouDid({
   const allTime = new Map(activity.actions.map((a) => [a.action, a.count]));
   const all = period.key === 'all';
   const used = ACTION_ORDER.filter((a) => (allTime.get(a) ?? 0) > 0);
-  const never = ACTION_ORDER.filter((a) => !allTime.get(a));
-  if (!activity.sectionsSince && !used.length) return null;
+  if (!used.length) return null;
 
   return (
     <div className="mt-10">
       <h3 className="mb-1 text-sm font-medium text-ink">What you did</h3>
       {!used.length ? (
-        <p className="py-3 text-sm text-ink-faint">
-          Nothing created or changed since this is recorded.
-        </p>
+        <p className="py-3 text-sm text-ink-faint">Nothing yet.</p>
       ) : (
         <table className="w-full text-sm">
           <thead>
@@ -716,9 +649,6 @@ function WhatYouDid({
                 <tr key={a}>
                   <td className="py-2 pr-2">
                     <span className="text-ink-muted">{info.label}</span>
-                    <span className="ml-2 text-2xs text-ink-faint">
-                      {info.section ? SECTIONS[info.section].label : 'Anywhere'}
-                    </span>
                   </td>
                   {!all && (
                     <td
@@ -743,15 +673,6 @@ function WhatYouDid({
             })}
           </tbody>
         </table>
-      )}
-      {prev && period.prev && used.length > 0 && (
-        <p className="mt-2 hidden text-2xs text-ink-faint sm:block">Before: {period.prev.label}.</p>
-      )}
-      {activity.sectionsSince && never.length > 0 && (
-        <p className="mt-3 text-2xs text-ink-faint">
-          Not done since {fmtDate.format(new Date(activity.sectionsSince))}:{' '}
-          {never.map((a) => ACTIONS[a].label.toLowerCase()).join(', ')}.
-        </p>
       )}
     </div>
   );
@@ -783,9 +704,6 @@ function WeekByWeek({
         <tbody className="divide-y divide-line/70">
           {shown.map((w, i) => {
             const before = shown[i + 1];
-            const top = [...w.totals.sections.entries()].sort(
-              (a, b) => b[1].seconds - a[1].seconds,
-            )[0];
             const partial = started! > w.from;
             return (
               <tr key={w.from}>
@@ -795,15 +713,6 @@ function WeekByWeek({
                       ? 'This week'
                       : `${fmtShort.format(parseLocalDate(w.from))} – ${fmtShort.format(parseLocalDate(addDays(w.from, 6)))}`}
                   </span>
-                  <div className="text-2xs text-ink-faint">
-                    {[
-                      w.totals.activeDays ? plural(w.totals.activeDays, 'day') : '',
-                      top && `most in ${SECTIONS[top[0]].label}`,
-                      partial && 'recorded from mid-week',
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </div>
                 </td>
                 <td className="w-[34%] py-2 pr-4" aria-hidden>
                   <div

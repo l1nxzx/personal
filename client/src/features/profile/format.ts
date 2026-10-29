@@ -5,10 +5,10 @@ export const formatNumber = (n: number) => nf.format(n);
 export const plural = (n: number, word: string, words = `${word}s`) =>
   `${nf.format(n)} ${n === 1 ? word : words}`;
 
-/** "41 h 12 min", "12 min", "under a minute". */
+/** "41 h 12 min", "12 min", "< 1 min". */
 export function formatDuration(seconds: number): string {
   if (seconds <= 0) return '0 min';
-  if (seconds < 60) return 'under a minute';
+  if (seconds < 60) return '< 1 min';
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   return h ? `${nf.format(h)} h${m ? ` ${m} min` : ''}` : `${m} min`;
