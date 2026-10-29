@@ -3,7 +3,7 @@ import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { AppShell, PageSkeleton, ShellFrame } from './components/shell/AppShell';
 import { Loading } from './components/ui/misc';
 import { useAuth } from './context/AuthContext';
-import { EditorPage } from './features/entries/EditorPage';
+import { EditorPage, preloadRichEditor } from './features/entries/EditorPage';
 import HomePage from './features/home/HomePage';
 import TasksPage from './features/tasks/TasksPage';
 import LoginPage from './pages/LoginPage';
@@ -29,7 +29,10 @@ const pages = {
   ProfilePage: () => import('./features/profile/ProfilePage'),
   NotFoundPage: () => import('./pages/NotFoundPage'),
 };
-const preloadPages = () => Object.values(pages).forEach((load) => void load().catch(() => {}));
+const preloadPages = () => {
+  Object.values(pages).forEach((load) => void load().catch(() => {}));
+  preloadRichEditor();
+};
 
 const JournalPage = lazy(pages.JournalPage);
 const WritingPage = lazy(pages.WritingPage);

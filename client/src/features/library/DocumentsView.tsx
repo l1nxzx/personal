@@ -14,7 +14,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import type { DocumentFile, DocumentFolder, FolderUsage } from '../../../../shared/types';
 import { Button } from '../../components/ui/Button';
 import { PointMenu, type MenuItem } from '../../components/ui/Menu';
@@ -160,6 +160,13 @@ export function DocumentsView() {
   const goScope = (s: Scope) =>
     update({ view: s === 'files' ? null : s, fav: null, folder: null, q: null }, true);
   const openFile = (id: string) => update({ doc: id }, true);
+  const navigate = useNavigate();
+  const location = useLocation();
+  // Closing a preview goes back to wherever it was opened from: this folder, or an entry whose
+  // linked words opened it. Only a preview opened straight from a typed or shared address
+  // has nothing to go back to, so it just closes.
+  const closePreview = () =>
+    location.key !== 'default' ? navigate(-1) : update({ doc: null }, false);
 
   const folders = useFolders();
   const sizes = useFolderSizes();
@@ -806,7 +813,7 @@ export function DocumentsView() {
       <DocumentPreview
         id={openId}
         tree={tree}
-        onClose={() => update({ doc: null }, false)}
+        onClose={closePreview}
         onMove={(file) => askMove([fileEntry(file)])}
         onShowFolder={goFolder}
         siblings={entries.flatMap((e) => (e.kind === 'file' ? [e.file] : []))}

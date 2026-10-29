@@ -1,4 +1,4 @@
-import { ExternalLink, Plus, X } from 'lucide-react';
+import { ChevronRight, Ellipsis, ExternalLink, Plus, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type {
@@ -8,13 +8,15 @@ import type {
   Perspective,
   Source,
 } from '../../../../shared/types';
-import { Button } from '../../components/ui/Button';
+import { Button, IconButton } from '../../components/ui/Button';
+import { Menu } from '../../components/ui/Menu';
 import { controlClass } from '../../components/ui/Field';
 import { useConfirm } from '../../context/ConfirmContext';
 import { useAutosize } from '../../hooks/useAutosize';
 import { cn } from '../../lib/cn';
-import { daysBetween, formatLongDate, formatRelativeDay, today } from '../../lib/dates';
+import { formatLongDate, formatRelativeDay, today } from '../../lib/dates';
 import { useTopics } from './api';
+import { writingTextClass, writingTextStyle, type WritingFont } from './writingStyle';
 
 export const NOTE_TYPES: { value: NoteType; label: string; hint: string }[] = [
   { value: 'note', label: 'Note', hint: 'Something learned, explained or worth keeping.' },
@@ -215,35 +217,6 @@ const FIELDS: {
   },
 ];
 
-function FieldText({ label, text }: { label: string; text: string }) {
-  if (!text.trim()) return null;
-  return (
-    <div className="mt-3">
-      <div className="text-2xs uppercase tracking-[0.1em] text-ink-faint">{label}</div>
-      <p className="mt-0.5 whitespace-pre-wrap text-[0.9375rem] leading-relaxed text-ink">{text}</p>
-    </div>
-  );
-}
-
-function PerspectiveView({ p, className }: { p: Perspective; className?: string }) {
-  return (
-    <div className={cn('border-l-2 border-accent/50 pl-4', className)}>
-      <div className="text-2xs uppercase tracking-[0.1em] text-ink-faint">
-        {formatLongDate(p.date)}
-      </div>
-      <p
-        className="mt-1 whitespace-pre-wrap font-serif text-[1.125rem] leading-snug text-ink"
-        style={{ fontVariationSettings: "'opsz' 20" }}
-      >
-        {p.position || <span className="italic text-ink-faint">No position written</span>}
-      </p>
-      {FIELDS.slice(1).map((f) => (
-        <FieldText key={f.key} label={f.label} text={p[f.key]} />
-      ))}
-    </div>
-  );
-}
-
 /** Typing pauses this long before a position is saved. */
 const SAVE_AFTER_MS = 800;
 
@@ -259,232 +232,313 @@ const blankPerspective = (): Perspective => ({
 const isEmpty = (p: Perspective) =>
   !p.position.trim() && !p.reasons.trim() && !p.influences.trim() && !p.uncertainties.trim();
 
-/** One part of where you stand, written in place like the rest of the note. */
+/** One part of a position, written in place in the same type as the note's text. */
 function StandField({
   label,
   value,
   placeholder,
-  large,
+  font,
+  autoFocus,
   onChange,
   onBlur,
 }: {
   label: string;
   value: string;
   placeholder: string;
-  large?: boolean;
+  font: WritingFont;
+  autoFocus?: boolean;
   onChange: (v: string) => void;
   onBlur: () => void;
 }) {
   const [el, setEl] = useState<HTMLTextAreaElement | null>(null);
-  useAutosize({ current: el }, value, large ? 2 : 1);
+  useAutosize({ current: el }, value, 1);
   return (
-    <label className="mt-5 block first:mt-0">
+    <label className="mt-4 block first:mt-0">
       <span className="text-2xs uppercase tracking-[0.1em] text-ink-faint">{label}</span>
       <textarea
         ref={setEl}
         value={value}
-        rows={large ? 2 : 1}
+        rows={1}
+        autoFocus={autoFocus}
         onChange={(e) => onChange(e.target.value)}
         onBlur={onBlur}
         placeholder={placeholder}
         className={cn(
-          'mt-1 block w-full resize-none overflow-hidden bg-transparent text-ink placeholder:text-ink-faint/80 focus:outline-none focus-visible:outline-none',
-          large
-            ? 'font-serif text-[1.3125rem] leading-snug sm:text-[1.4375rem]'
-            : 'text-[1.0625rem] leading-7',
+          'block w-full resize-none overflow-hidden bg-transparent text-ink placeholder:text-ink-faint/80 focus:outline-none focus-visible:outline-none',
+          writingTextClass(font),
         )}
-        style={large ? { fontVariationSettings: "'opsz' 28" } : undefined}
+        style={writingTextStyle(font)}
       />
     </label>
   );
 }
 
-/**
- * The heart of a belief: where you stand on it now, written in place and saved as you type.
- * Each position is dated and kept. Recording a new one never erases the old; any earlier one
- * can be read beside the current. Nothing is scored or judged.
- */
-export function BeliefStand({
-  perspectives,
-  onChange,
+/** One dated position: a header row that opens and closes it, and its four parts. */
+function PositionItem({
+  p,
+  latest,
+  open,
+  font,
   readOnly,
+  autoFocus,
+  onToggle,
+  onSave,
+  onDelete,
 }: {
-  perspectives: Perspective[];
-  onChange: (next: Perspective[]) => void;
-  /** The reading view: the current position as text. */
+  p: Perspective;
+  latest: boolean;
+  open: boolean;
+  font: WritingFont;
   readOnly?: boolean;
+  autoFocus?: boolean;
+  onToggle: () => void;
+  onSave: (p: Perspective) => void;
+  onDelete: (p: Perspective) => void;
 }) {
-  const confirm = useConfirm();
-  const sorted = [...perspectives].sort((a, b) => a.date.localeCompare(b.date));
-  const latest = sorted.at(-1);
-  const earlier = sorted.slice(0, -1).reverse();
-  const [compareId, setCompareId] = useState<string | null>(null);
-  const compared = earlier.find((p) => p.id === compareId) ?? null;
-
-  // The position being written: the latest one, or a new one dated today.
-  const [draft, setDraftState] = useState<Perspective>(() => latest ?? blankPerspective());
-  const draftRef = useRef(draft);
+  const [draft, setDraftState] = useState(p);
+  const draftRef = useRef(p);
   const dirty = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout>>();
-  const latestProps = useRef({ perspectives, onChange });
-  latestProps.current = { perspectives, onChange };
+  const saveRef = useRef(onSave);
+  saveRef.current = onSave;
 
-  const setDraft = (next: Perspective) => {
-    draftRef.current = next;
-    setDraftState(next);
-  };
-
-  // Follow changes made elsewhere (another device, a deleted position), unless mid-edit.
+  // Follow changes made elsewhere (another device), unless in the middle of typing.
   useEffect(() => {
     if (dirty.current) return;
-    const next = latest ?? (isEmpty(draftRef.current) ? draftRef.current : blankPerspective());
-    draftRef.current = next;
-    setDraftState(next);
-  }, [latest]);
+    draftRef.current = p;
+    setDraftState(p);
+  }, [p]);
 
   const save = useCallback(() => {
     clearTimeout(timer.current);
     if (!dirty.current) return;
     dirty.current = false;
-    const d = draftRef.current;
-    const { perspectives: all, onChange: change } = latestProps.current;
-    const known = all.some((p) => p.id === d.id);
-    if (isEmpty(d) && !known) return; // nothing written yet
-    change([...all.filter((p) => p.id !== d.id), d]);
+    saveRef.current(draftRef.current);
   }, []);
-  useEffect(() => save, [save]); // anything typed is saved when the note closes
+  useEffect(() => save, [save]); // anything typed is saved when it closes
 
   const edit = (patch: Partial<Perspective>) => {
-    setDraft({ ...draftRef.current, ...patch });
+    const next = { ...draftRef.current, ...patch };
+    draftRef.current = next;
+    setDraftState(next);
     dirty.current = true;
     clearTimeout(timer.current);
     timer.current = setTimeout(save, SAVE_AFTER_MS);
   };
 
-  const recordNew = () => {
-    clearTimeout(timer.current);
-    dirty.current = false;
-    const current = draftRef.current;
-    const next = { ...current, id: newId(), date: today() };
-    onChange([...perspectives.filter((p) => p.id !== current.id), current, next]);
-    setDraft(next);
-  };
-
-  const remove = async (p: Perspective) => {
-    const ok = await confirm({
-      title: 'Delete this position?',
-      message: `Where you stood on ${formatLongDate(p.date)} will be removed for good.`,
-      confirmLabel: 'Delete',
-      danger: true,
-    });
-    if (ok) onChange(perspectives.filter((x) => x.id !== p.id));
-  };
-
-  const t = today();
-  const stale = !!latest && daysBetween(latest.date, t) > 90;
-
+  const filled = FIELDS.filter((f) => draft[f.key].trim());
   return (
-    <section aria-labelledby="stand-heading" className="mt-8">
-      <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h2 id="stand-heading" className="section-label flex-1">
-          Where I stand
-        </h2>
-        {/* The reading view shows the date with the position itself. */}
+    <li className="py-1">
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => {
+            save();
+            onToggle();
+          }}
+          aria-expanded={open}
+          className="-ml-1 flex min-w-0 flex-1 items-baseline gap-2 rounded px-1 py-2 text-left hover:bg-surface/70"
+        >
+          <ChevronRight
+            className={cn(
+              'h-3.5 w-3.5 shrink-0 self-center text-ink-faint transition-transform',
+              open && 'rotate-90',
+            )}
+            aria-hidden
+          />
+          <span className="shrink-0 text-2xs uppercase tracking-[0.1em] text-ink-muted">
+            {formatLongDate(draft.date)}
+          </span>
+          {latest && <span className="shrink-0 text-2xs text-accent">Latest</span>}
+          {!open && (
+            <span className="min-w-0 flex-1 truncate text-sm text-ink-muted">
+              {draft.position.trim() || <span className="italic text-ink-faint">Not written</span>}
+            </span>
+          )}
+        </button>
         {!readOnly && (
-          <label className="relative inline-flex cursor-pointer items-center overflow-hidden text-2xs text-ink-faint hover:text-ink-muted">
-            As of {formatLongDate(draft.date)}
-            <input
-              type="date"
-              value={draft.date}
-              max="9999-12-31"
-              onChange={(e) => e.target.value && edit({ date: e.target.value })}
-              aria-label="Date of this position"
-              className="absolute inset-0 h-full w-full min-w-0 cursor-pointer opacity-0"
-            />
-          </label>
+          <Menu
+            trigger={(t) => (
+              <IconButton
+                label={`Actions for the position of ${formatLongDate(draft.date)}`}
+                {...t}
+              >
+                <Ellipsis className="h-4 w-4" />
+              </IconButton>
+            )}
+            items={[
+              {
+                label: 'Delete position…',
+                icon: <Trash2 />,
+                danger: true,
+                onSelect: () => onDelete(draftRef.current),
+              },
+            ]}
+          />
         )}
       </div>
 
-      {readOnly ? (
-        latest ? (
-          <PerspectiveView p={latest} />
-        ) : (
-          <p className="text-sm italic text-ink-faint">No position written yet.</p>
-        )
-      ) : (
-        <div className="border-l-2 border-accent/50 pl-4">
-          {FIELDS.map((f, i) => (
-            <StandField
-              key={f.key}
-              large={i === 0}
-              label={f.label}
-              placeholder={f.placeholder}
-              value={draft[f.key]}
-              onChange={(v) => edit({ [f.key]: v })}
-              onBlur={save}
+      {open && (
+        <div className="mb-4 ml-[0.4375rem] mt-1 border-l-2 border-accent/50 pl-4">
+          {readOnly ? (
+            filled.length ? (
+              filled.map((f) => (
+                <div key={f.key} className="mt-4 first:mt-0">
+                  <div className="text-2xs uppercase tracking-[0.1em] text-ink-faint">
+                    {f.label}
+                  </div>
+                  <p
+                    className={cn('whitespace-pre-wrap text-ink', writingTextClass(font))}
+                    style={writingTextStyle(font)}
+                  >
+                    {draft[f.key]}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm italic text-ink-faint">Nothing written.</p>
+            )
+          ) : (
+            <>
+              <label className="relative mb-3 inline-flex cursor-pointer items-center overflow-hidden text-2xs text-ink-faint hover:text-ink-muted">
+                Change date
+                <input
+                  type="date"
+                  value={draft.date}
+                  max="9999-12-31"
+                  onChange={(e) => e.target.value && edit({ date: e.target.value })}
+                  aria-label="Date of this position"
+                  className="absolute inset-0 h-full w-full min-w-0 cursor-pointer opacity-0"
+                />
+              </label>
+              {FIELDS.map((f, i) => (
+                <StandField
+                  key={f.key}
+                  label={f.label}
+                  placeholder={f.placeholder}
+                  font={font}
+                  autoFocus={autoFocus && i === 0}
+                  value={draft[f.key]}
+                  onChange={(v) => edit({ [f.key]: v })}
+                  onBlur={save}
+                />
+              ))}
+            </>
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
+
+/**
+ * The heart of a belief: where you stand on it, as a list of dated positions, newest first.
+ * The latest is open and the earlier ones are folded to one line; any can be opened, closed,
+ * edited or deleted. A new position starts blank and is only kept once something is written.
+ */
+export function BeliefStand({
+  perspectives,
+  onChange,
+  font,
+  readOnly,
+}: {
+  perspectives: Perspective[];
+  onChange: (next: Perspective[]) => void;
+  font: WritingFont;
+  /** The reading view: positions as text. */
+  readOnly?: boolean;
+}) {
+  const confirm = useConfirm();
+  const known = [...perspectives].sort((a, b) => b.date.localeCompare(a.date));
+  // A new, blank position waiting for its first words (a belief with none starts with one).
+  const [fresh, setFresh] = useState<Perspective | null>(() =>
+    !readOnly && !perspectives.length ? blankPerspective() : null,
+  );
+  const pending = fresh && !known.some((p) => p.id === fresh.id) ? fresh : null;
+  const list = pending ? [pending, ...known] : known;
+  const [open, setOpen] = useState<Set<string>>(() => new Set(list[0] ? [list[0].id] : []));
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const all = useRef(perspectives);
+  all.current = perspectives;
+
+  const toggle = (id: string) =>
+    setOpen((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const save = (p: Perspective) => {
+    const exists = all.current.some((x) => x.id === p.id);
+    if (isEmpty(p) && !exists) return; // nothing written yet: not kept
+    onChange([...all.current.filter((x) => x.id !== p.id), p]);
+  };
+
+  const startNew = () => {
+    if (pending) {
+      setOpen(new Set([pending.id]));
+      setFocusId(pending.id);
+      return;
+    }
+    const p = blankPerspective();
+    setFresh(p);
+    setOpen(new Set([p.id])); // fold the others away, so the new one has the room
+    setFocusId(p.id);
+  };
+
+  const remove = async (p: Perspective) => {
+    const saved = all.current.some((x) => x.id === p.id);
+    if (saved && !isEmpty(p)) {
+      const ok = await confirm({
+        title: 'Delete this position?',
+        message: `Where you stood on ${formatLongDate(p.date)} will be removed for good.`,
+        confirmLabel: 'Delete',
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    if (fresh?.id === p.id) setFresh(null);
+    if (saved) onChange(all.current.filter((x) => x.id !== p.id));
+  };
+
+  return (
+    <section aria-labelledby="stand-heading" className="mt-8">
+      <div className="mb-1 flex items-center gap-3">
+        <h2 id="stand-heading" className="section-label flex-1">
+          Where I stand
+        </h2>
+        {!readOnly && (
+          <button
+            type="button"
+            onClick={startNew}
+            className="-my-1 inline-flex h-9 items-center gap-1 rounded px-2 text-[0.8125rem] text-ink-muted hover:bg-surface-2 hover:text-ink sm:h-7"
+          >
+            <Plus className="h-3.5 w-3.5" /> New position
+          </button>
+        )}
+      </div>
+      {list.length ? (
+        <ul>
+          {list.map((p, i) => (
+            <PositionItem
+              key={p.id}
+              p={p}
+              latest={i === 0 && list.length > 1}
+              open={open.has(p.id)}
+              font={font}
+              readOnly={readOnly}
+              autoFocus={focusId === p.id}
+              onToggle={() => toggle(p.id)}
+              onSave={save}
+              onDelete={(x) => void remove(x)}
             />
           ))}
-        </div>
-      )}
-
-      {!readOnly && latest && (
-        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
-          {latest.date < t && (
-            <Button size="sm" onClick={recordNew}>
-              Record a new position
-            </Button>
-          )}
-          <span className="text-2xs text-ink-faint">
-            {latest.date < t
-              ? `Keeps this one from ${formatRelativeDay(latest.date)} as it was${stale ? '. Worth another look?' : ''}`
-              : 'Saved as you write'}
-          </span>
-        </div>
-      )}
-
-      {earlier.length > 0 && (
-        <div className="mt-8">
-          <h3 className="text-[0.8125rem] font-medium text-ink-muted">Earlier positions</h3>
-          <ul className="mt-1 divide-y divide-line/70">
-            {earlier.map((p) => (
-              <li key={p.id} className="flex items-baseline gap-3 py-2">
-                <span className="w-24 shrink-0 text-2xs text-ink-faint">
-                  {formatRelativeDay(p.date)}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-sm text-ink-muted">
-                  {p.position || '—'}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setCompareId(compareId === p.id ? null : p.id)}
-                  aria-pressed={compareId === p.id}
-                  className={cn(
-                    'h-9 shrink-0 rounded px-2 text-[0.8125rem] sm:h-7',
-                    compareId === p.id ? 'bg-surface-2 text-ink' : 'text-accent hover:bg-surface-2',
-                  )}
-                >
-                  {compareId === p.id ? 'Comparing' : 'Compare'}
-                </button>
-                {!readOnly && (
-                  <button
-                    type="button"
-                    onClick={() => void remove(p)}
-                    aria-label={`Delete position from ${p.date}`}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded text-ink-faint hover:text-bad sm:h-7 sm:w-7"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-          {compared && latest && (
-            <div className="mt-5 grid grid-cols-1 gap-6 md:grid-cols-2" aria-label="Comparison">
-              <PerspectiveView p={compared} className="border-line-strong" />
-              <PerspectiveView p={readOnly ? latest : draft} />
-            </div>
-          )}
-        </div>
+        </ul>
+      ) : (
+        <p className="py-2 text-sm text-ink-faint">
+          {readOnly ? 'No position written yet.' : 'Write down where you stand on this, and why.'}
+        </p>
       )}
     </section>
   );
