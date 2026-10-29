@@ -149,6 +149,8 @@ export async function syncTextLinks(
   entry: Ref,
   body: string,
   records?: links.LinkRecord[],
+  /** Files whose linked words this save removed: unlinked however the link was made. */
+  unlinked: Set<string> = new Set(),
 ): Promise<links.LinkRecord[]> {
   const self = refKey(entry);
   const anchored = anchorKeys(body);
@@ -156,7 +158,8 @@ export async function syncTextLinks(
   const other = (l: links.LinkRecord) => (l.from === self ? l.to : l.from);
   const stale = current.filter((l) => {
     const key = other(l);
-    return /^(document|folder):/.test(key) && !anchored.has(key) && fromText(l);
+    if (!/^(document|folder):/.test(key) || anchored.has(key)) return false;
+    return unlinked.has(key) || fromText(l);
   });
   const linked = new Set(current.map(other));
   const missing = [...anchored].filter((key) => !linked.has(key));

@@ -244,24 +244,29 @@ describe('words linked to files', () => {
     expect(await linkedTo(agent, `type=journal&id=${entry.id}`)).toEqual([]);
   });
 
-  it('keeps a link added by hand when the linked words go', async () => {
+  it('unlinks the file when its words go, even if the link was made by hand', async () => {
     const { agent } = await signedUpAgent();
     const school = await folder(agent, 'School');
+    const other = await folder(agent, 'Other');
     const entry = (
       await agent
         .post('/api/journal')
         .send({ date: '2026-10-29', body: `See [papers](folder:${school.id}).` })
         .expect(201)
     ).body.entry;
-    await agent
-      .post('/api/links')
-      .send({ from: { type: 'journal', id: entry.id }, to: { type: 'folder', id: school.id } })
-      .expect(204);
+    // As the earlier app did when words were linked, plus a hand-made link to another folder.
+    for (const to of [school.id, other.id])
+      await agent
+        .post('/api/links')
+        .send({ from: { type: 'journal', id: entry.id }, to: { type: 'folder', id: to } })
+        .expect(204);
+
     await agent
       .patch(`/api/journal/${entry.id}`)
       .send({ rev: entry.rev, body: 'See papers.' })
       .expect(200);
-    expect(await linkedTo(agent, `type=journal&id=${entry.id}`)).toEqual([school.id]);
+    expect(await linkedTo(agent, `type=folder&id=${school.id}`)).toEqual([]);
+    expect(await linkedTo(agent, `type=journal&id=${entry.id}`)).toEqual([other.id]);
   });
 
   it('clears links left behind by earlier versions, but never older hand-made ones', async () => {

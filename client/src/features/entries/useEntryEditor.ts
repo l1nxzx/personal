@@ -9,7 +9,14 @@ import type {
 import { ApiError } from '../../lib/apiFetch';
 import { keys } from '../../lib/keys';
 import { readJSON, removeKey, writeJSON } from '../../lib/storage';
+import { anchorsIn } from '../../lib/anchors';
 import { createEntry, patchEntry, useInvalidateEntryLists } from './api';
+
+const anchorSignature = (body: string) =>
+  anchorsIn(body)
+    .map((a) => `${a.ref.type}:${a.ref.id}`)
+    .sort()
+    .join(' ');
 
 export interface Fields {
   title: string;
@@ -164,6 +171,10 @@ export function useEntryEditor(
         revRef.current = meta.rev;
         qc.setQueryData(keys.entry(kind, meta.id), { ...meta, body: snapshot.body });
       }
+      // Linked words added or removed: the server linked or unlinked those files, so refresh
+      // every "Linked" list (also when this save finishes after the editor has closed).
+      if (anchorSignature(snapshot.body) !== anchorSignature(saved.body))
+        void qc.invalidateQueries({ queryKey: ['links'] });
       savedRef.current = snapshot;
       retries.current = 0;
       setErrorText(null);

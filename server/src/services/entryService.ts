@@ -305,7 +305,13 @@ async function updateEntryWith(
   const before = anchorKeys(bodyBefore ?? '');
   const after = anchorKeys(result.record.body);
   if (before.size !== after.size || [...after].some((k) => !before.has(k)))
-    await syncTextLinks(ctx, { type: kind, id }, result.record.body);
+    await syncTextLinks(
+      ctx,
+      { type: kind, id },
+      result.record.body,
+      undefined,
+      new Set([...before].filter((k) => !after.has(k))),
+    );
   return toMeta(kind, result.record);
 }
 
