@@ -67,6 +67,8 @@ authRoutes.post(
   asyncHandler(async (req, res) => {
     await authService.logout(req.cookies?.[REFRESH_COOKIE]);
     clearAuthCookies(res);
+    // Files and thumbnails are cached for a long time; don't leave them behind on this device.
+    res.set('Clear-Site-Data', '"cache"');
     res.status(204).end();
   }),
 );

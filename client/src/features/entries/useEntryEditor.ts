@@ -103,6 +103,8 @@ export function useEntryEditor(
   const draftTimer = useRef<ReturnType<typeof setTimeout>>();
   const dirtySince = useRef<number | null>(null);
   const retries = useRef(0);
+  /** Set by `ensureCreated`: create the entry even though its text is still blank. */
+  const forceCreate = useRef(false);
 
   const setStatus = (s: SaveStatus) => {
     statusRef.current = s;
@@ -127,12 +129,13 @@ export function useEntryEditor(
 
     const snapshot = fieldsRef.current;
     const saved = savedRef.current;
-    if (equal(snapshot, saved)) {
+    const creating = forceCreate.current && !idRef.current;
+    if (equal(snapshot, saved) && !creating) {
       dirtySince.current = null;
       if (statusRef.current !== 'new') setStatus('saved');
       return;
     }
-    if (!idRef.current && isBlank(snapshot)) return; // nothing worth creating yet
+    if (!idRef.current && isBlank(snapshot) && !creating) return; // nothing worth creating yet
 
     inFlight.current = true;
     setStatus('saving');
@@ -204,6 +207,23 @@ export function useEntryEditor(
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, qc, writeDraftNow]);
+
+  /**
+   * Creates a never-saved entry now, even with no title or text yet, because something else in
+   * it is worth keeping (a belief's position). Resolves to its id, or null if saving failed.
+   */
+  const ensureCreated = useCallback(async (): Promise<string | null> => {
+    while (inFlight.current) await new Promise((r) => setTimeout(r, 100));
+    if (!idRef.current) {
+      forceCreate.current = true;
+      try {
+        await flush();
+      } finally {
+        forceCreate.current = false;
+      }
+    }
+    return idRef.current;
+  }, [flush]);
 
   const setFields = useCallback(
     (patch: Partial<Fields>) => {
@@ -359,6 +379,7 @@ export function useEntryEditor(
     conflict,
     notice,
     flush,
+    ensureCreated,
     retry,
     applyRemote,
     resolveConflict,

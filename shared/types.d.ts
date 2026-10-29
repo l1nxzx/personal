@@ -139,6 +139,8 @@ export interface CreateEntryRequest {
   noteType?: NoteType;
   topic?: string | null;
   sources?: Source[];
+  /** Beliefs only. */
+  perspectives?: Perspective[];
 }
 
 export interface UpdateEntryRequest {
@@ -358,6 +360,14 @@ export interface LibrarySelection {
 export interface MoveItemsRequest extends LibrarySelection {
   /** Destination folder; null = top level. */
   targetId: string | null;
+}
+
+/** Stored bytes and files per folder, counted through every level below it. */
+export interface FolderSizes {
+  /** Keyed by folder id; folders with nothing inside are absent. */
+  folders: Record<string, { bytes: number; files: number }>;
+  /** The whole library. */
+  total: { bytes: number; files: number };
 }
 
 /** What sits inside some folders, counted through every level below them. */

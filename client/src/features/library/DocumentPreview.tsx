@@ -5,6 +5,7 @@ import {
   ChevronUp,
   Download,
   ExternalLink,
+  FileText,
   FolderInput,
   Star,
   Trash2,
@@ -31,6 +32,7 @@ import {
   useUpdateDocument,
 } from './api';
 import { FolderGlyph } from './FileIcons';
+import { FileMetadata } from './ItemMetadata';
 import { locationLabel, type FolderTree } from './folderTree';
 
 interface PreviewProps {
@@ -164,6 +166,7 @@ function Panel({
   };
 
   const d = doc.data;
+  const [metaOpen, setMetaOpen] = useState(false);
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-14 shrink-0 items-center gap-1 border-b border-line px-2">
@@ -210,6 +213,9 @@ function Panel({
             >
               <Download className="h-4 w-4" />
             </a>
+            <IconButton label="Metadata" onClick={() => setMetaOpen(true)}>
+              <FileText className="h-4 w-4" />
+            </IconButton>
             <IconButton label="Delete file" onClick={() => void remove(d)}>
               <Trash2 className="h-4 w-4" />
             </IconButton>
@@ -242,6 +248,11 @@ function Panel({
           </>
         )}
       </div>
+      <FileMetadata
+        file={metaOpen ? (d ?? null) : null}
+        tree={tree}
+        onClose={() => setMetaOpen(false)}
+      />
     </div>
   );
 }

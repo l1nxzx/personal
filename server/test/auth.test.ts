@@ -81,7 +81,8 @@ describe('auth', () => {
     const refresh = cookiesOf(reg)
       .find((c) => c.startsWith('refresh_token='))!
       .split(';')[0]!;
-    await request(app).post('/api/auth/logout').set('Cookie', refresh).expect(204);
+    const out = await request(app).post('/api/auth/logout').set('Cookie', refresh).expect(204);
+    expect(out.headers['clear-site-data']).toBe('"cache"');
     await request(app).post('/api/auth/refresh').set('Cookie', refresh).expect(401);
   });
 

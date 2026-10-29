@@ -87,6 +87,28 @@ export function link(value: string, start: number, end: number): Edit {
 }
 
 /**
+ * Links the selected words to an address (a file or folder in the library). With nothing
+ * selected, `fallback` (the file's name) is inserted as the linked text.
+ */
+export function linkTo(
+  value: string,
+  start: number,
+  end: number,
+  url: string,
+  fallback: string,
+): Edit {
+  const chosen = value.slice(start, end);
+  // Keep the spaces around a double-tapped word outside the link.
+  const lead = chosen.length - chosen.trimStart().length;
+  const trail = chosen.length - chosen.trimEnd().length;
+  const label = (chosen.trim() || fallback).replace(/[[\]\\]/g, (c) => `\\${c}`);
+  const text = `[${label}](${url})`;
+  const s = start + (chosen.trim() ? lead : 0);
+  const e = end - (chosen.trim() ? trail : 0);
+  return { start: s, end: e, text, selStart: s + text.length, selEnd: s + text.length };
+}
+
+/**
  * Enter inside a list or quote continues it; Enter on an empty item ends it.
  * Returns null when Enter should behave normally.
  */

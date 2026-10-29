@@ -1,6 +1,7 @@
 import {
   Download,
   Eye,
+  FileText,
   FolderInput,
   FolderOpen,
   FolderPlus,
@@ -25,12 +26,14 @@ import { cn } from '../../lib/cn';
 import { readJSON, writeJSON } from '../../lib/storage';
 import {
   fileUrl,
+  formatSize,
   folderUsage,
   useCreateFolder,
   useDeleteFolder,
   useDeleteItems,
   useDocumentSearch,
   useFolderDocuments,
+  useFolderSizes,
   useFolders,
   useMoveItems,
   useRecentDocuments,
@@ -65,6 +68,7 @@ import {
   type Entry,
   type ItemHandlers,
 } from './LibraryItems';
+import { FileMetadata, FolderMetadata } from './ItemMetadata';
 import { Breadcrumbs, ScopeTabs, SelectionBar, Toolbar, type Scope } from './LibraryToolbar';
 import { MoveDialog, type MoveTarget } from './MoveDialog';
 import { NameDialog } from './NameDialog';
@@ -158,6 +162,7 @@ export function DocumentsView() {
   const openFile = (id: string) => update({ doc: id }, true);
 
   const folders = useFolders();
+  const sizes = useFolderSizes();
   const tree = useMemo(() => buildTree(folders.data ?? []), [folders.data]);
   const current = folderId ? tree.byId.get(folderId) : undefined;
   const missing = !!folderId && folders.isSuccess && !current;
@@ -265,6 +270,7 @@ export function DocumentsView() {
   const [deleting, setDeleting] = useState<{ folder: DocumentFolder; usage: FolderUsage } | null>(
     null,
   );
+  const [metaFor, setMetaFor] = useState<Entry | null>(null);
   const [details, setDetails] = useState<DocumentFolder | null>(null);
   const [pointMenu, setPointMenu] = useState<{
     at: { x: number; y: number };
@@ -413,6 +419,7 @@ export function DocumentsView() {
       return [
         { label: 'Open', icon: <FolderOpen />, onSelect: () => goFolder(e.folder.id) },
         { label: 'Details & links', icon: <Info />, onSelect: () => setDetails(e.folder) },
+        { label: 'Metadata', icon: <FileText />, onSelect: () => setMetaFor(e) },
         rename,
         moveItem,
         ...(showLocation
@@ -432,6 +439,7 @@ export function DocumentsView() {
     return [
       { label: 'Preview', icon: <Eye />, onSelect: () => openFile(f.id) },
       { label: 'Download', icon: <Download />, onSelect: () => download(f) },
+      { label: 'Metadata', icon: <FileText />, onSelect: () => setMetaFor(e) },
       rename,
       moveItem,
       {
@@ -540,6 +548,7 @@ export function DocumentsView() {
     },
     onDropOnFolder: (id, ev) => dropOn(id, ev),
     locate: showLocation ? (id) => locationLabel(tree, id) : undefined,
+    folderBytes: (id) => (sizes.data ? (sizes.data.folders[id]?.bytes ?? 0) : undefined),
   };
 
   // ---------------------------------------------------------------- keyboard
@@ -567,9 +576,17 @@ export function DocumentsView() {
   // ---------------------------------------------------------------- render
   const folderCount = entries.filter((e) => e.kind === 'folder').length;
   const fileCount = entries.length - folderCount;
+  // What this folder holds in total (with everything below it); the whole library at the top.
+  const storedHere =
+    scope === 'files' && !searching && sizes.data
+      ? folderId
+        ? (sizes.data.folders[folderId]?.bytes ?? 0)
+        : sizes.data.total.bytes
+      : null;
   const summary = [
     folderCount && countLabel(folderCount, 'folder', 'folders'),
     fileCount && countLabel(fileCount, 'file', 'files'),
+    storedHere && `${formatSize(storedHere)} stored`,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -794,6 +811,16 @@ export function DocumentsView() {
         onShowFolder={goFolder}
         siblings={entries.flatMap((e) => (e.kind === 'file' ? [e.file] : []))}
         onNavigate={(id) => update({ doc: id }, false)}
+      />
+      <FileMetadata
+        file={metaFor?.kind === 'file' ? metaFor.file : null}
+        tree={tree}
+        onClose={() => setMetaFor(null)}
+      />
+      <FolderMetadata
+        folder={metaFor?.kind === 'folder' ? metaFor.folder : null}
+        tree={tree}
+        onClose={() => setMetaFor(null)}
       />
       <FolderPanel
         folder={details}

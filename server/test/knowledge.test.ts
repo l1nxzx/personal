@@ -45,6 +45,36 @@ describe('knowledge notes', () => {
     expect(all[0].note).toMatchObject({ noteType: 'note', topic: null });
   });
 
+  it('creates a belief from where you stand alone, and ignores positions on other notes', async () => {
+    const { agent } = await signedUpAgent();
+    const stand = {
+      id: 'p1',
+      date: '2026-10-29',
+      position: 'Habits beat motivation',
+      reasons: '',
+      influences: '',
+      uncertainties: '',
+    };
+    const belief = (
+      await agent
+        .post('/api/notes')
+        .send({ title: '', body: '', noteType: 'belief', perspectives: [stand] })
+        .expect(201)
+    ).body.entry;
+    expect(belief.note.perspectives).toEqual([stand]);
+    const listed = (await agent.get('/api/notes?type=belief')).body.items;
+    expect(listed[0].note.lastConsidered).toBe('2026-10-29');
+    expect(listed[0].excerpt).toBe('Habits beat motivation');
+
+    const plain = (
+      await agent
+        .post('/api/notes')
+        .send({ title: 'x', noteType: 'note', perspectives: [stand] })
+        .expect(201)
+    ).body.entry;
+    expect(plain.note.perspectives).toEqual([]);
+  });
+
   it('records perspectives on beliefs without disturbing the open editor (no rev bump)', async () => {
     const { agent } = await signedUpAgent();
     const { body } = await agent

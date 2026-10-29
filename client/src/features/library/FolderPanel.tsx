@@ -5,7 +5,7 @@ import { Button, IconButton } from '../../components/ui/Button';
 import { Dialog } from '../../components/ui/Dialog';
 import { formatAgo } from '../../lib/dates';
 import { LinksPanel } from '../links/LinksPanel';
-import { folderUsage } from './api';
+import { folderUsage, formatSize, useFolderSizes } from './api';
 import { usageLabel } from './DeleteFolderDialog';
 import { FolderGlyph } from './FileIcons';
 import { locationLabel, type FolderTree } from './folderTree';
@@ -70,6 +70,7 @@ function Body({
     queryKey: ['documents', 'usage', folder.id],
     queryFn: () => folderUsage([folder.id]),
   });
+  const sizes = useFolderSizes();
   const current = tree.byId.get(folder.id) ?? folder;
 
   return (
@@ -105,6 +106,16 @@ function Body({
                 ? usageLabel(usage.data) || 'Nothing yet'
                 : usage.isError
                   ? 'Couldn’t count'
+                  : '…'}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-[0.8125rem] text-ink-faint">Stored</dt>
+            <dd className="mt-0.5 text-ink">
+              {sizes.data
+                ? formatSize(sizes.data.folders[current.id]?.bytes ?? 0)
+                : sizes.isError
+                  ? 'Couldn’t add up'
                   : '…'}
             </dd>
           </div>

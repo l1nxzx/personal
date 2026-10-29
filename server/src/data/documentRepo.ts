@@ -152,6 +152,12 @@ export async function countInFolders(uid: string, folderIds: string[]): Promise<
   return total;
 }
 
+/** Every file's folder and size, and nothing else (one small read per file). */
+export async function listSizes(uid: string): Promise<{ folderId: string | null; size: number }[]> {
+  const snap = await col(uid).select('folderId', 'size').get();
+  return snap.docs.map((d) => ({ folderId: d.get('folderId') ?? null, size: d.get('size') ?? 0 }));
+}
+
 /** Files that predate folder documents (no `folderId` field at all). */
 export async function listUnplaced(uid: string): Promise<UnplacedDocument[]> {
   const snap = await col(uid).select('name', 'tags', 'folder', 'folderId').get();
