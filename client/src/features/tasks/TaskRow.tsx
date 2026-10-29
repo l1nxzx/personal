@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { ProjectTaskCounts, Task } from '../../../../shared/types';
 import { Checkbox } from '../../components/ui/Checkbox';
+import { SkeletonBlock, SkeletonText } from '../../components/ui/Skeleton';
 import { useToast } from '../../context/ToastContext';
 import { errorMessage } from '../../lib/apiFetch';
 import { cn } from '../../lib/cn';
@@ -193,6 +194,19 @@ export function TaskRow({
           {extra}
         </div>
       )}
+    </div>
+  );
+}
+
+/** A task row while loading: same box, checkbox square and title line. Use inside a Skeleton. */
+export function TaskRowSkeleton({ width, meta }: { width: string; meta?: boolean }) {
+  return (
+    <div className="flex items-start gap-3 py-2.5">
+      <SkeletonBlock className="mt-[3px] h-[18px] w-[18px] shrink-0 rounded-sm" />
+      <div className="min-w-0 flex-1">
+        <SkeletonText className="text-[0.9375rem] leading-6" width={width} />
+        {meta && <SkeletonText className="mt-0.5 text-2xs" width="5rem" />}
+      </div>
     </div>
   );
 }

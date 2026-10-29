@@ -1,11 +1,11 @@
 import { Link } from 'react-router-dom';
 import type { EntrySummary } from '../../../../shared/types';
 import { Page } from '../../components/shell/PageHeader';
-import { Empty, ErrorNote, Loading } from '../../components/ui/misc';
+import { Empty, ErrorNote } from '../../components/ui/misc';
 import { errorMessage } from '../../lib/apiFetch';
 import { useNoteList } from './api';
 import { NoteRow } from './IdeasPage';
-import { GroupHeading, JournalSectionHeader } from './ListParts';
+import { EntryRowsSkeleton, GroupHeading, JournalSectionHeader } from './ListParts';
 
 /**
  * Thinking: the questions and beliefs you're working through, grouped by topic.
@@ -47,9 +47,16 @@ export default function ThinkingPage() {
         .
       </p>
       {loading ? (
-        <Loading />
+        <EntryRowsSkeleton pad="py-3.5" heading />
       ) : error ? (
-        <ErrorNote>{errorMessage(error)}</ErrorNote>
+        <ErrorNote
+          onRetry={() => {
+            void questions.refetch();
+            void beliefs.refetch();
+          }}
+        >
+          {errorMessage(error)}
+        </ErrorNote>
       ) : !all.length ? (
         <Empty>
           Nothing yet. Start with a question you keep coming back to, or write down something you

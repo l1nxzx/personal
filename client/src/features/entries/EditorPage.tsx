@@ -19,7 +19,8 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { Entry, EntryKind, NoteMeta, NoteType } from '../../../../shared/types';
 import { Button, IconButton } from '../../components/ui/Button';
 import { Menu } from '../../components/ui/Menu';
-import { Loading } from '../../components/ui/misc';
+import { ErrorNote, Loading } from '../../components/ui/misc';
+import { Skeleton, SkeletonText } from '../../components/ui/Skeleton';
 import { useConfirm } from '../../context/ConfirmContext';
 import { useToast } from '../../context/ToastContext';
 import { useAutosize } from '../../hooks/useAutosize';
@@ -77,25 +78,43 @@ export function EditorPage({ kind }: { kind: EntryKind }) {
 function ExistingEntry({ kind, id }: { kind: EntryKind; id: string }) {
   const query = useEntry(kind, id);
   if (query.data) return <Editor kind={kind} entry={query.data} />;
+  // Laid out like the editor (top bar, then the writing column), so it opens without a jump.
   return (
-    <div className="mx-auto max-w-[42rem] px-5 pt-safe">
-      <div className="flex h-14 items-center">
-        <Link
-          to={LIST_PATH[kind]}
-          className="-ml-2 flex items-center gap-1 rounded px-2 py-2 text-sm text-ink-muted hover:text-ink"
-        >
-          <ChevronLeft className="h-4 w-4" /> {SECTION_LABEL[kind]}
-        </Link>
+    <div>
+      <div className="pt-safe">
+        <div className="mx-auto flex h-14 max-w-[52rem] items-center px-2 sm:px-4">
+          <Link
+            to={LIST_PATH[kind]}
+            className="flex h-10 items-center gap-1 rounded pl-1 pr-2 text-sm text-ink-muted hover:bg-surface-2 hover:text-ink sm:h-8"
+          >
+            <ChevronLeft className="h-5 w-5 sm:h-4 sm:w-4" /> {SECTION_LABEL[kind]}
+          </Link>
+        </div>
       </div>
-      {query.isError ? (
-        <p className="py-8 text-ink-muted">
-          {query.error instanceof ApiError && query.error.status === 404
-            ? "This entry doesn't exist any more."
-            : errorMessage(query.error)}
-        </p>
-      ) : (
-        <Loading />
-      )}
+      <div className="mx-auto w-full max-w-[42rem] px-5 pt-4 sm:px-8 sm:pt-10">
+        {query.isError ? (
+          query.error instanceof ApiError && query.error.status === 404 ? (
+            <p className="py-8 text-ink-muted">This entry doesn&apos;t exist any more.</p>
+          ) : (
+            <ErrorNote onRetry={() => void query.refetch()}>{errorMessage(query.error)}</ErrorNote>
+          )
+        ) : (
+          <Skeleton>
+            {kind === 'journal' && (
+              <SkeletonText className="mb-3 text-[0.8125rem] font-medium" width="10rem" />
+            )}
+            <SkeletonText
+              className="font-serif text-[1.625rem] font-medium leading-tight sm:text-[1.875rem]"
+              width="58%"
+            />
+            <div className="mt-6 space-y-1">
+              {['100%', '96%', '100%', '88%', '93%', '64%'].map((w, i) => (
+                <SkeletonText key={i} className="text-[1.0625rem] leading-8" width={w} />
+              ))}
+            </div>
+          </Skeleton>
+        )}
+      </div>
     </div>
   );
 }

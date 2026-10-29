@@ -2,14 +2,15 @@ import { ChevronDown, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { Project, Task } from '../../../../shared/types';
-import { Empty, ErrorNote, Loading } from '../../components/ui/misc';
+import { Empty, ErrorNote } from '../../components/ui/misc';
+import { Skeleton, SkeletonText } from '../../components/ui/Skeleton';
 import { useToast } from '../../context/ToastContext';
 import { errorMessage } from '../../lib/apiFetch';
 import { cn } from '../../lib/cn';
 import { formatAgo, today } from '../../lib/dates';
 import { AddTask } from '../tasks/AddTask';
 import { useOpenTasks } from '../tasks/api';
-import { TaskRow } from '../tasks/TaskRow';
+import { TaskRow, TaskRowSkeleton } from '../tasks/TaskRow';
 import { openByProject } from '../tasks/views';
 import { useCreateProject, useProjects, useProjectTaskCounts } from './api';
 import { ProgressLine, purposeOf, targetLabel } from './ProjectParts';
@@ -41,8 +42,9 @@ export function ProjectsView() {
     <div className="mt-4">
       <NewProject />
 
-      {projects.isLoading ? (
-        <Loading />
+      {/* Wait for the open tasks too: without them every project would first show "no next step". */}
+      {projects.isLoading || open.isLoading ? (
+        <ProjectsSkeleton />
       ) : projects.isError ? (
         <ErrorNote onRetry={() => void projects.refetch()}>
           {errorMessage(projects.error)}
@@ -63,6 +65,7 @@ export function ProjectsView() {
                   project={p}
                   open={byProject.get(p.id) ?? []}
                   total={counts.data?.[p.id]}
+                  countsLoading={counts.isLoading}
                 />
               ))}
             </ul>
@@ -117,6 +120,25 @@ export function ProjectsView() {
         </>
       )}
     </div>
+  );
+}
+
+/** Two active projects in outline: name, purpose, progress and the next-action box. */
+function ProjectsSkeleton() {
+  return (
+    <Skeleton className="mt-2 divide-y divide-line/70">
+      {['48%', '36%'].map((w) => (
+        <div key={w} className="py-7 first:pt-4">
+          <SkeletonText className="font-serif text-[1.375rem] leading-snug" width={w} />
+          <SkeletonText className="mt-1 text-[0.9375rem] leading-6" width="78%" />
+          <SkeletonText className="mt-3 text-2xs" width="10rem" />
+          <div className="mt-4 border-l-2 border-line pl-4">
+            <SkeletonText className="text-2xs" width="5.5rem" />
+            <TaskRowSkeleton width="55%" />
+          </div>
+        </div>
+      ))}
+    </Skeleton>
   );
 }
 
@@ -177,10 +199,12 @@ function ActiveProject({
   project: p,
   open,
   total,
+  countsLoading,
 }: {
   project: Project;
   open: Task[];
   total: number | undefined;
+  countsLoading: boolean;
 }) {
   const purpose = purposeOf(p);
   const [next, ...rest] = open;
@@ -215,13 +239,19 @@ function ActiveProject({
         )}
       </Link>
 
-      {total !== undefined && (
+      {total !== undefined ? (
         <ProgressLine
           className="mt-3"
           done={Math.max(0, total - open.length)}
           total={total}
           milestones={milestones}
         />
+      ) : (
+        countsLoading && (
+          <Skeleton className="mt-3">
+            <SkeletonText className="text-2xs" width="10rem" />
+          </Skeleton>
+        )
       )}
 
       <div className={cn('mt-4 border-l-2 pl-4', next ? 'border-accent/60' : 'border-line')}>

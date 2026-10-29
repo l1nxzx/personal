@@ -5,6 +5,7 @@ import type { EntryKind, TagCount } from '../../../../shared/types';
 import { PageHeader } from '../../components/shell/PageHeader';
 import { cn } from '../../lib/cn';
 import { TabLinks } from '../../components/ui/misc';
+import { Skeleton, SkeletonText, skeletonWidth } from '../../components/ui/Skeleton';
 
 /** Shared header for the Journal & Writing section. */
 export function JournalSectionHeader({
@@ -134,6 +135,41 @@ export function GroupHeading({ children }: { children: ReactNode }) {
     >
       {children}
     </h2>
+  );
+}
+
+/**
+ * Placeholder rows for the Writing and Ideas lists: serif title, two lines of excerpt, a meta
+ * line. `pad` is the real rows' vertical padding.
+ */
+export function EntryRowsSkeleton({
+  rows = 4,
+  pad,
+  heading,
+  className,
+}: {
+  rows?: number;
+  pad: string;
+  /** Start with a GroupHeading-sized line. */
+  heading?: boolean;
+  className?: string;
+}) {
+  return (
+    <Skeleton className={className}>
+      {heading && (
+        <SkeletonText className="pb-2 pt-6 font-serif text-[1.0625rem] font-medium" width="7rem" />
+      )}
+      <ul className="divide-y divide-line/70 border-t border-line/70">
+        {Array.from({ length: rows }, (_, i) => (
+          <li key={i} className={pad}>
+            <SkeletonText className="font-serif text-[1.0625rem]" width={skeletonWidth(i)} />
+            <SkeletonText className="mt-0.5 text-sm leading-6" width="100%" />
+            <SkeletonText className="text-sm leading-6" width="68%" />
+            <SkeletonText className="mt-1.5 text-2xs" width="7rem" />
+          </li>
+        ))}
+      </ul>
+    </Skeleton>
   );
 }
 

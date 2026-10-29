@@ -8,7 +8,8 @@ import { AutoSaveText } from '../../components/ui/AutoSaveText';
 import { Button, IconButton } from '../../components/ui/Button';
 import { controlClass } from '../../components/ui/Field';
 import { Menu } from '../../components/ui/Menu';
-import { ErrorNote, Loading } from '../../components/ui/misc';
+import { ErrorNote } from '../../components/ui/misc';
+import { Skeleton, SkeletonBlock, SkeletonText } from '../../components/ui/Skeleton';
 import { useConfirm } from '../../context/ConfirmContext';
 import { useToast } from '../../context/ToastContext';
 import { useAutosize } from '../../hooks/useAutosize';
@@ -49,13 +50,25 @@ export default function MoneyIdeaPage() {
       {idea.data ? (
         <IdeaView key={idea.data.id} idea={idea.data} />
       ) : idea.isError ? (
-        <ErrorNote>
-          {idea.error instanceof ApiError && idea.error.status === 404
-            ? 'This idea no longer exists.'
-            : errorMessage(idea.error)}
-        </ErrorNote>
+        idea.error instanceof ApiError && idea.error.status === 404 ? (
+          <ErrorNote>This idea no longer exists.</ErrorNote>
+        ) : (
+          <ErrorNote onRetry={() => void idea.refetch()}>{errorMessage(idea.error)}</ErrorNote>
+        )
       ) : (
-        <Loading />
+        <Skeleton>
+          <SkeletonText className="page-title" width="55%" />
+          <div className="mt-4 flex gap-1">
+            {['4.5rem', '5rem', '4rem', '4.5rem'].map((w, i) => (
+              <SkeletonBlock key={i} className="h-9 sm:h-7" style={{ width: w }} />
+            ))}
+          </div>
+          <SkeletonText className="mt-1.5 text-2xs" width="12rem" />
+          <div className="mt-6 border-l-2 border-line bg-surface py-3 pl-4 pr-3">
+            <SkeletonText className="text-2xs" width="4.5rem" />
+            <SkeletonText className="mt-1 py-1 text-[1.0625rem] leading-7" width="70%" />
+          </div>
+        </Skeleton>
       )}
     </Page>
   );

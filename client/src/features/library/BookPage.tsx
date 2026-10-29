@@ -7,7 +7,8 @@ import { AutoSaveText } from '../../components/ui/AutoSaveText';
 import { Button, IconButton } from '../../components/ui/Button';
 import { controlClass } from '../../components/ui/Field';
 import { Menu } from '../../components/ui/Menu';
-import { ErrorNote, Loading } from '../../components/ui/misc';
+import { ErrorNote } from '../../components/ui/misc';
+import { Skeleton, SkeletonBlock, SkeletonText } from '../../components/ui/Skeleton';
 import { useConfirm } from '../../context/ConfirmContext';
 import { useToast } from '../../context/ToastContext';
 import { ApiError, errorMessage } from '../../lib/apiFetch';
@@ -37,13 +38,27 @@ export default function BookPage() {
       {book.data ? (
         <BookView key={book.data.id} book={book.data} />
       ) : book.isError ? (
-        <ErrorNote>
-          {book.error instanceof ApiError && book.error.status === 404
-            ? 'This book is no longer in your library.'
-            : errorMessage(book.error)}
-        </ErrorNote>
+        book.error instanceof ApiError && book.error.status === 404 ? (
+          <ErrorNote>This book is no longer in your library.</ErrorNote>
+        ) : (
+          <ErrorNote onRetry={() => void book.refetch()}>{errorMessage(book.error)}</ErrorNote>
+        )
       ) : (
-        <Loading />
+        <Skeleton>
+          <SkeletonText className="page-title" width="60%" />
+          <SkeletonText className="mt-1 text-[1.0625rem]" width="35%" />
+          <div className="mt-5 space-y-3 border-y border-line/70 py-3">
+            {['15rem', '13rem', '8rem'].map((w) => (
+              <div
+                key={w}
+                className="grid grid-cols-1 gap-3 sm:grid-cols-[5.5rem_1fr] sm:items-center"
+              >
+                <SkeletonText className="text-[0.8125rem]" width="3rem" />
+                <SkeletonBlock className="h-9 sm:h-8" style={{ width: w, maxWidth: '100%' }} />
+              </div>
+            ))}
+          </div>
+        </Skeleton>
       )}
     </Page>
   );

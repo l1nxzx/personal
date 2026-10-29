@@ -5,7 +5,8 @@ import type { WeekContext, WeeklyReview, WeeklyReviewAnswers } from '../../../..
 import { Page } from '../../components/shell/PageHeader';
 import { AutoSaveText } from '../../components/ui/AutoSaveText';
 import { IconButton } from '../../components/ui/Button';
-import { ErrorNote, Loading } from '../../components/ui/misc';
+import { ErrorNote } from '../../components/ui/misc';
+import { Skeleton, SkeletonText } from '../../components/ui/Skeleton';
 import { useToast } from '../../context/ToastContext';
 import { apiFetch, errorMessage } from '../../lib/apiFetch';
 import { addDays, formatRelativeDay, parseLocalDate, today, toLocalDate } from '../../lib/dates';
@@ -93,7 +94,7 @@ export default function ReviewsPage() {
       </div>
 
       {data.isLoading ? (
-        <Loading />
+        <ReviewSkeleton />
       ) : data.isError ? (
         <ErrorNote onRetry={() => void data.refetch()}>{errorMessage(data.error)}</ErrorNote>
       ) : (
@@ -155,6 +156,36 @@ export default function ReviewsPage() {
         </section>
       )}
     </Page>
+  );
+}
+
+/** The week while it loads: the facts box in outline, then the questions, answers pending. */
+function ReviewSkeleton() {
+  return (
+    <>
+      <Skeleton className="mt-6 bg-surface px-4 py-3">
+        <SkeletonText className="text-2xs" width="8rem" />
+        <SkeletonText className="mt-2 text-sm" width="70%" />
+        <SkeletonText className="mt-1.5 text-sm" width="50%" />
+      </Skeleton>
+      <div className="mt-8 space-y-8">
+        {QUESTIONS.map((q) => (
+          <section key={q.key}>
+            <h3
+              className="font-serif text-[1.0625rem] text-ink"
+              style={{ fontVariationSettings: "'opsz' 20" }}
+            >
+              {q.question}
+            </h3>
+            <Skeleton className="mt-1">
+              <SkeletonText className="text-[0.9375rem] leading-7" width="4rem" />
+              <div className="h-7" />
+              <div className="mt-1 h-4" />
+            </Skeleton>
+          </section>
+        ))}
+      </div>
+    </>
   );
 }
 

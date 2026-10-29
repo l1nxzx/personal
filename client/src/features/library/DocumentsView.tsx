@@ -17,7 +17,7 @@ import { useSearchParams } from 'react-router-dom';
 import type { DocumentFile, DocumentFolder, FolderUsage } from '../../../../shared/types';
 import { Button } from '../../components/ui/Button';
 import { PointMenu, type MenuItem } from '../../components/ui/Menu';
-import { Empty, ErrorNote, Loading } from '../../components/ui/misc';
+import { Empty, ErrorNote } from '../../components/ui/misc';
 import { useConfirm } from '../../context/ConfirmContext';
 import { useToast } from '../../context/ToastContext';
 import { errorMessage } from '../../lib/apiFetch';
@@ -60,6 +60,7 @@ import {
   DRAG_TYPE,
   entryName,
   GridView,
+  ItemsSkeleton,
   ListView,
   type Entry,
   type ItemHandlers,
@@ -685,7 +686,7 @@ export function DocumentsView() {
             This folder no longer exists. It may have been moved or deleted on another device.
           </Empty>
         ) : loading ? (
-          <Loading />
+          <ItemsSkeleton view={view} />
         ) : error ? (
           <ErrorNote
             onRetry={() => {

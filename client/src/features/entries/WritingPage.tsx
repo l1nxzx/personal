@@ -12,7 +12,7 @@ import { errorMessage } from '../../lib/apiFetch';
 import { formatAgo } from '../../lib/dates';
 import { useSearch } from '../me/api';
 import { useDeleteEntry, useSetEntryFlags, useTags, useWritingList } from './api';
-import { FilterSearch, JournalSectionHeader, TagFilter } from './ListParts';
+import { EntryRowsSkeleton, FilterSearch, JournalSectionHeader, TagFilter } from './ListParts';
 
 /** Drafts, essays and other writing that isn't tied to a day. Pinned first, then recently edited. */
 export default function WritingPage() {
@@ -71,8 +71,8 @@ export default function WritingPage() {
               results={(search.data ?? []).filter((r) => r.type === 'writing')}
             />
           )
-        ) : list.isLoading ? (
-          <Loading />
+        ) : list.isLoading || tags.isLoading ? (
+          <EntryRowsSkeleton pad="py-4" />
         ) : list.isError ? (
           <ErrorNote onRetry={() => void list.refetch()}>{errorMessage(list.error)}</ErrorNote>
         ) : !items?.length ? (

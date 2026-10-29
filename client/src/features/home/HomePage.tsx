@@ -6,6 +6,7 @@ import type { EntrySummary, WeeklyReview } from '../../../../shared/types';
 import { Page } from '../../components/shell/PageHeader';
 import { IconButton } from '../../components/ui/Button';
 import { ErrorNote } from '../../components/ui/misc';
+import { Skeleton, SkeletonText, skeletonWidth } from '../../components/ui/Skeleton';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { apiFetch, errorMessage } from '../../lib/apiFetch';
@@ -17,6 +18,7 @@ import { useIncomeSummary } from '../money/api';
 import { formatMoney, monthKey, monthLabel, monthTotals, shiftMonth } from '../money/money';
 import { AddTask } from '../tasks/AddTask';
 import { useOpenTasks } from '../tasks/api';
+import { TaskRowSkeleton } from '../tasks/TaskRow';
 import { TaskList } from '../tasks/TasksPage';
 import { todayGroups } from '../tasks/views';
 import { promptFor } from './prompts';
@@ -145,6 +147,12 @@ function FocusLine() {
 function InboxLine() {
   const home = useHome();
   const n = home.data?.inboxCount ?? 0;
+  if (home.isLoading)
+    return (
+      <Skeleton className="mt-3">
+        <SkeletonText className="text-sm" width="9rem" />
+      </Skeleton>
+    );
   if (!n) return null;
   return (
     <Link
@@ -177,6 +185,12 @@ function TodaySection() {
       </div>
       {open.isError && (
         <ErrorNote onRetry={() => void open.refetch()}>{errorMessage(open.error)}</ErrorNote>
+      )}
+      {open.isLoading && (
+        <Skeleton>
+          <TaskRowSkeleton width="58%" />
+          <TaskRowSkeleton width="40%" />
+        </Skeleton>
       )}
       {shownDue.length > 0 && <TaskList tasks={shownDue} showPlanned={false} />}
       {shownDue.length > 0 && shownPlanned.length > 0 && (
@@ -259,6 +273,18 @@ function Continue() {
           </Link>
         </p>
       )}
+      {home.isLoading && (
+        <Skeleton className="-mx-2">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div key={i} className="px-2 py-2.5">
+              <SkeletonText className="font-serif text-[1rem]" width={skeletonWidth(i)} />
+              <SkeletonText className="mt-0.5 text-[0.8125rem] leading-5" width="100%" />
+              <SkeletonText className="text-[0.8125rem] leading-5" width="64%" />
+              <SkeletonText className="mt-0.5 text-2xs" width="5.5rem" />
+            </div>
+          ))}
+        </Skeleton>
+      )}
       <ul className="-mx-2">
         {recent.map((e) => (
           <li key={`${e.kind}:${e.id}`}>
@@ -296,6 +322,7 @@ function RecentRow({ e }: { e: EntrySummary }) {
 function MoneyOverview() {
   const summary = useIncomeSummary();
   const prefs = usePrefs();
+  if (summary.isLoading || prefs.isLoading) return <MoneyOverviewSkeleton />;
   if (!summary.data || !prefs.data) return null;
   const cur = prefs.data.baseCurrency;
   const now = monthKey(new Date());
@@ -332,6 +359,23 @@ function MoneyOverview() {
           </Link>
         </p>
       )}
+    </section>
+  );
+}
+
+function MoneyOverviewSkeleton() {
+  return (
+    <section aria-labelledby="home-money">
+      <div className="mb-2 flex items-baseline gap-3">
+        <h2 id="home-money" className="section-label flex-1">
+          Money
+        </h2>
+      </div>
+      <Skeleton className="py-1.5">
+        <SkeletonText className="text-2xs" width="4.5rem" />
+        <SkeletonText className="text-xl" width="7rem" />
+        <SkeletonText className="mt-0.5 text-[0.8125rem]" width="11rem" />
+      </Skeleton>
     </section>
   );
 }

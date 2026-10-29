@@ -1,10 +1,10 @@
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { Outlet, useMatch } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
-import { cn } from '../../lib/cn';
-import { Loading } from '../ui/misc';
-import { PAGE_FRAME } from './PageHeader';
+import { Skeleton, SkeletonText, skeletonWidth } from '../ui/Skeleton';
+import { Page } from './PageHeader';
 import { CaptureDialog } from '../../features/capture/CaptureDialog';
 import { useActivityTracking } from '../../features/profile/activityTracker';
 import { SearchDialog } from '../../features/search/SearchDialog';
@@ -14,15 +14,58 @@ import { isMod, isTyping, useKeydown } from '../../lib/hotkeys';
 import { MobileNav } from './MobileNav';
 import { Sidebar } from './Sidebar';
 
-/** Layout for signed-in pages: navigation, global shortcuts, Quick Capture and Search. */
-export function AppShell() {
-  const { openCapture, openSearch, captureOpen, searchOpen } = useUI();
-  const { user } = useAuth();
+/**
+ * Navigation around the page area. Also shown on its own while the session is being checked,
+ * so opening the site shows its structure at once instead of a blank screen.
+ */
+export function ShellFrame({ children }: { children?: ReactNode }) {
   // Editors take the whole phone screen; no bottom bar competing with the keyboard.
   const journalEditor = useMatch('/journal/:id');
   const writingEditor = useMatch('/writing/:id');
   const noteEditor = useMatch('/ideas/:id');
   const inEditor = !!(journalEditor || writingEditor || noteEditor);
+
+  return (
+    <div className="min-h-dvh">
+      <Sidebar />
+      <main className="lg:pl-[13.5rem]">{children}</main>
+      {!inEditor && <MobileNav />}
+    </div>
+  );
+}
+
+/** Stand-in for a page that can't render yet (session check, page code still downloading). */
+export function PageSkeleton() {
+  return (
+    <Page>
+      <Skeleton className="pt-safe">
+        <div className="flex min-h-[3.5rem] items-center pt-3 lg:pt-10">
+          <SkeletonText className="page-title" width="11rem" />
+        </div>
+        <div className="mt-8 space-y-6">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i}>
+              <SkeletonText className="font-serif text-[1.0625rem]" width={skeletonWidth(i)} />
+              <SkeletonText className="mt-0.5 text-sm" width="88%" />
+            </div>
+          ))}
+        </div>
+      </Skeleton>
+    </Page>
+  );
+}
+
+/** Layout for signed-in pages: navigation, global shortcuts, Quick Capture and Search. */
+export function AppShell({ preload }: { preload?: () => void }) {
+  const { openCapture, openSearch, captureOpen, searchOpen } = useUI();
+  const { user } = useAuth();
+
+  // Fetch the other pages' code while idle, so moving between sections doesn't wait for it.
+  useEffect(() => {
+    if (!preload) return;
+    const t = setTimeout(preload, 1500);
+    return () => clearTimeout(t);
+  }, [preload]);
 
   useRealtime(true);
   useActivityTracking(user?.id);
@@ -46,18 +89,16 @@ export function AppShell() {
   });
 
   return (
-    <div className="min-h-dvh">
-      <Sidebar />
-      <main className="lg:pl-[13.5rem]">
+    <>
+      <ShellFrame>
         {/* Pages load on demand inside the shell, so the navigation never disappears. */}
-        <Suspense fallback={<Loading className={cn(PAGE_FRAME, 'pt-16')} />}>
+        <Suspense fallback={<PageSkeleton />}>
           <Outlet />
         </Suspense>
-      </main>
-      {!inEditor && <MobileNav />}
+      </ShellFrame>
       <CaptureDialog />
       <SearchDialog />
       <TaskDetailHost />
-    </div>
+    </>
   );
 }

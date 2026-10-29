@@ -9,6 +9,7 @@ import { Dialog } from '../../components/ui/Dialog';
 import { controlClass } from '../../components/ui/Field';
 import { Menu } from '../../components/ui/Menu';
 import { Empty, ErrorNote, Loading, Segmented } from '../../components/ui/misc';
+import { Skeleton, SkeletonText, skeletonWidth } from '../../components/ui/Skeleton';
 import { useConfirm } from '../../context/ConfirmContext';
 import { useToast } from '../../context/ToastContext';
 import { errorMessage } from '../../lib/apiFetch';
@@ -38,6 +39,7 @@ import {
   parseAmount,
   shiftMonth,
 } from './money';
+import { HistorySkeleton, Pending } from './MoneySkeletons';
 import { MoneyTabs } from './MoneyTabs';
 
 type Period = 'all' | 'year' | 'month';
@@ -87,6 +89,12 @@ export default function ExpensesPage() {
     return acc;
   }, {});
   const categories = Object.values(summary.data?.categoryLabels ?? {});
+  // Totals are in the base currency, so they wait for it as well as for the summary.
+  const loading = summary.isLoading || prefs.isLoading;
+  // Couldn't load: no figures rather than zeros (the error and retry show below the form).
+  const failed = !summary.data && summary.isError;
+  const figure = (amount: number, width: string) =>
+    loading ? <Pending width={width} /> : failed ? '—' : formatMoney(amount, base);
 
   return (
     <Page width="default">
@@ -124,7 +132,7 @@ export default function ExpensesPage() {
             className="mt-1 font-serif text-[2rem] leading-none tabular-nums text-ink"
             style={{ fontVariationSettings: "'opsz' 48" }}
           >
-            {formatMoney(total, base)}
+            {figure(total, '8rem')}
           </div>
           <div className="mt-1.5 text-sm text-ink-muted">actual expenses</div>
         </div>
@@ -132,22 +140,27 @@ export default function ExpensesPage() {
           <div className="text-2xs uppercase tracking-[0.12em] text-ink-faint">
             {period === 'month' ? 'Last month' : 'This month'} · {monthLabel(sideMonth)}
           </div>
-          <div className="mt-1 text-lg tabular-nums text-ink">{formatMoney(sideTotal, base)}</div>
+          <div className="mt-1 text-lg tabular-nums text-ink">{figure(sideTotal, '5.5rem')}</div>
         </div>
         <div>
           <div className="text-2xs uppercase tracking-[0.12em] text-ink-faint">
             Recurring · estimate
           </div>
           <div className="mt-1 text-lg tabular-nums text-ink">
-            {Object.keys(recurring).length
-              ? Object.entries(recurring)
-                  .map(([c, v]) => `≈ ${formatMoney(v, c)}`)
-                  .join(' + ')
-              : '—'}
+            {subs.isLoading ? (
+              <Pending width="5.5rem" />
+            ) : Object.keys(recurring).length ? (
+              Object.entries(recurring)
+                .map(([c, v]) => `≈ ${formatMoney(v, c)}`)
+                .join(' + ')
+            ) : (
+              '—'
+            )}
           </div>
           <div className="text-2xs text-ink-faint">
-            per month, from {active.length} active{' '}
-            {active.length === 1 ? 'subscription' : 'subscriptions'}
+            per month
+            {!subs.isLoading &&
+              `, from ${active.length} active ${active.length === 1 ? 'subscription' : 'subscriptions'}`}
           </div>
         </div>
       </section>
@@ -166,6 +179,8 @@ export default function ExpensesPage() {
       <Subscriptions
         subs={subs.data}
         loading={subs.isLoading}
+        error={subs.error}
+        onRetry={() => void subs.refetch()}
         base={base}
         categories={categories}
       />
@@ -213,7 +228,9 @@ function ExpenseForm({
   onDone?: () => void;
 }) {
   const [amount, setAmount] = useState(entry ? amountInput(entry.amountMinor, entry.currency) : '');
-  const [currency, setCurrency] = useState(entry?.currency ?? defaultCurrency);
+  // Unset until picked, so a default that arrives after the form appears still applies.
+  const [picked, setCurrency] = useState<string | null>(entry?.currency ?? null);
+  const currency = picked ?? defaultCurrency;
   const [category, setCategory] = useState(entry?.category ?? '');
   const [date, setDate] = useState(entry?.date ?? today());
   const [description, setDescription] = useState(entry?.description ?? '');
@@ -475,11 +492,15 @@ function SubscriptionForm({
 function Subscriptions({
   subs,
   loading,
+  error,
+  onRetry,
   base,
   categories,
 }: {
   subs: Subscription[] | undefined;
   loading: boolean;
+  error: unknown;
+  onRetry: () => void;
   base: string;
   categories: string[];
 }) {
@@ -538,7 +559,18 @@ function Subscriptions({
         </div>
       )}
       {loading ? (
-        <Loading />
+        <Skeleton>
+          <ul className="divide-y divide-line/70 border-y border-line/70">
+            {[0, 1].map((i) => (
+              <li key={i} className="py-2.5">
+                <SkeletonText className="text-[0.9375rem]" width={skeletonWidth(i)} />
+                <SkeletonText className="text-2xs" width="9rem" />
+              </li>
+            ))}
+          </ul>
+        </Skeleton>
+      ) : error && !subs ? (
+        <ErrorNote onRetry={onRetry}>{errorMessage(error)}</ErrorNote>
       ) : !list.length && !adding ? (
         <p className="text-sm text-ink-faint">No subscriptions yet.</p>
       ) : (
@@ -649,7 +681,7 @@ function History({ onEdit }: { onEdit: (id: string) => void }) {
         History
       </h2>
       {list.isLoading ? (
-        <Loading />
+        <HistorySkeleton />
       ) : list.isError ? (
         <ErrorNote onRetry={() => void list.refetch()}>{errorMessage(list.error)}</ErrorNote>
       ) : !entries.length ? (

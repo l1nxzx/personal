@@ -5,7 +5,8 @@ import type { Moment } from '../../../../shared/types';
 import { Page } from '../../components/shell/PageHeader';
 import { IconButton } from '../../components/ui/Button';
 import { Menu } from '../../components/ui/Menu';
-import { Empty, ErrorNote, Loading } from '../../components/ui/misc';
+import { Empty, ErrorNote } from '../../components/ui/misc';
+import { Skeleton, SkeletonText, skeletonWidth } from '../../components/ui/Skeleton';
 import { useConfirm } from '../../context/ConfirmContext';
 import { errorMessage } from '../../lib/apiFetch';
 import { formatLongDate } from '../../lib/dates';
@@ -44,7 +45,21 @@ export default function TimelinePage() {
       </div>
 
       {moments.isLoading ? (
-        <Loading />
+        <Skeleton className="mt-10">
+          <SkeletonText className="font-serif text-[1.375rem]" width="3.5rem" />
+          <ol className="mt-3 border-l border-line-strong">
+            {[0, 1, 2].map((i) => (
+              <li key={i} className="pb-7 pl-6">
+                <SkeletonText className="text-2xs" width="7rem" />
+                <SkeletonText
+                  className="mt-0.5 font-serif text-[1.125rem]"
+                  width={skeletonWidth(i)}
+                />
+                <SkeletonText className="mt-1 text-sm leading-6" width="80%" />
+              </li>
+            ))}
+          </ol>
+        </Skeleton>
       ) : moments.isError ? (
         <ErrorNote onRetry={() => void moments.refetch()}>{errorMessage(moments.error)}</ErrorNote>
       ) : !moments.data?.length ? (

@@ -4,7 +4,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import type { MoneyIdeaStatus, MoneyIdeaSummary } from '../../../../shared/types';
 import { Page, PageHeader } from '../../components/shell/PageHeader';
 import { Menu } from '../../components/ui/Menu';
-import { Empty, ErrorNote, Loading, Segmented } from '../../components/ui/misc';
+import { Empty, ErrorNote, Segmented } from '../../components/ui/misc';
+import { Skeleton, SkeletonText, skeletonWidth } from '../../components/ui/Skeleton';
 import { useToast } from '../../context/ToastContext';
 import { errorMessage } from '../../lib/apiFetch';
 import { cn } from '../../lib/cn';
@@ -112,7 +113,18 @@ export default function MoneyIdeasPage() {
       </p>
 
       {ideas.isLoading ? (
-        <Loading />
+        <Skeleton className="mt-8">
+          <SkeletonText className="mb-1 text-2xs" width="6rem" />
+          <ul className="divide-y divide-line/70">
+            {[0, 1, 2].map((i) => (
+              <li key={i} className="py-3.5">
+                <SkeletonText className="font-serif text-[1.0625rem]" width={skeletonWidth(i)} />
+                <SkeletonText className="mt-0.5 text-sm" width="70%" />
+                <SkeletonText className="mt-1 text-2xs" width="8rem" />
+              </li>
+            ))}
+          </ul>
+        </Skeleton>
       ) : ideas.isError ? (
         <ErrorNote onRetry={() => void ideas.refetch()}>{errorMessage(ideas.error)}</ErrorNote>
       ) : !items.length ? (

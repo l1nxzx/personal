@@ -1,14 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createContext, useContext, useMemo } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { AuthResponse, LoginRequest, PublicUser, Role } from '../../../shared/types';
 import { ApiError, apiFetch } from '../lib/apiFetch';
-import { removeKey } from '../lib/storage';
+import { readJSON, removeKey, writeJSON } from '../lib/storage';
 
 interface AuthValue {
   user: PublicUser | null;
   /** True only during the initial "who am I?" check. */
   isLoading: boolean;
+  /** This device was signed in last time, so the check will most likely find a user. */
+  expectUser: boolean;
   login: (input: LoginRequest) => Promise<void>;
   logout: () => Promise<void>;
   /** Replace the cached user after a profile change. */
@@ -18,6 +20,8 @@ interface AuthValue {
 
 const AuthContext = createContext<AuthValue | null>(null);
 export const ME_KEY = ['me'] as const;
+/** Only a yes/no on this device, never anything about the account. */
+const SIGNED_IN_HINT = 'auth:signed-in';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
@@ -50,17 +54,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const user = me.data ?? null;
+  const [expectUser] = useState(() => readJSON<boolean>(SIGNED_IN_HINT) === true);
+  useEffect(() => {
+    if (!me.isSuccess) return;
+    if (me.data) writeJSON(SIGNED_IN_HINT, true);
+    else removeKey(SIGNED_IN_HINT);
+  }, [me.isSuccess, me.data]);
 
   const value = useMemo<AuthValue>(
     () => ({
       user,
       isLoading: me.isLoading,
+      expectUser,
       login: async (input) => void (await login(input)),
       logout: async () => void (await logout()),
       setUser: (u) => qc.setQueryData(ME_KEY, u),
       hasRole: (...roles) => !!user && roles.includes(user.role),
     }),
-    [user, me.isLoading, login, logout, qc],
+    [user, me.isLoading, expectUser, login, logout, qc],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

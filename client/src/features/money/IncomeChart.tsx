@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { IncomeSummary } from '../../../../shared/types';
+import { Skeleton, SkeletonBlock, SkeletonText } from '../../components/ui/Skeleton';
 import { cn } from '../../lib/cn';
 import { formatMoney, monthLabel, monthTotals, shiftMonth } from './money';
 
@@ -180,6 +181,33 @@ export function IncomeChart({
         </div>
       )}
     </figure>
+  );
+}
+
+/** Bar heights for the loading chart: an even, unremarkable shape that reads as "bars". */
+const SKELETON_BARS = [38, 52, 30, 64, 46, 58, 34, 70, 50, 42, 60, 48];
+
+/** The chart's frame while the summary loads: legend row, twelve faint bars, month labels. */
+export function IncomeChartSkeleton() {
+  return (
+    <Skeleton>
+      <div className="mb-3 flex h-8 items-center sm:h-6">
+        <SkeletonText className="text-2xs" width="4.5rem" />
+      </div>
+      <div className="pl-12">
+        <div className="flex h-44 items-end gap-1 border-b border-line-strong sm:gap-2">
+          {SKELETON_BARS.map((h, i) => (
+            <span key={i} className="flex h-full flex-1 items-end justify-center">
+              <SkeletonBlock
+                className="w-full max-w-[1.5rem] rounded-b-none"
+                style={{ height: `${h}%` }}
+              />
+            </span>
+          ))}
+        </div>
+        <div className="mt-1.5 h-4" />
+      </div>
+    </Skeleton>
   );
 }
 
