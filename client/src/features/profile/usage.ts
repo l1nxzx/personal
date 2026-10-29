@@ -313,8 +313,6 @@ export const ACTIONS: Record<UsageAction, ActionInfo> = {
     short: 'organised',
     section: 'documents',
   },
-  'vault.created': { label: 'Vault items added', short: 'added', section: 'vault' },
-  'vault.edited': { label: 'Vault items changed', short: 'changed', section: 'vault' },
   'link.created': { label: 'Links made by hand', short: 'links', section: null },
 };
 

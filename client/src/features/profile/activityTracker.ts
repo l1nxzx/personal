@@ -18,6 +18,9 @@ import { keysWithPrefix, readJSON, removeKey, writeJSON } from '../../lib/storag
  * another tab or device. Nothing about what is on the page or typed is recorded: only how long,
  * when, the local date and which section.
  *
+ * Nothing at all is recorded while the Private Vault is on screen (`sectionOf` gives null): its
+ * time is in no section and not in the total either.
+ *
  * A visit starts when a section is entered from another one, or when the site comes back into
  * view after 30 minutes or more. Every tab notes the section it shows and when (`LAST_KEY`), so
  * reloading, opening a second tab of the same section or switching back to this tab soon after
@@ -71,14 +74,14 @@ const isBeat = (b: unknown): b is StoredBeat =>
   typeof (b as StoredBeat).endedAt === 'number';
 
 export interface ActivityTracker {
-  /** The address on screen moved to another section. */
-  setSection: (section: UsageSection) => void;
+  /** The address on screen moved to another section (null: a page that is never recorded). */
+  setSection: (section: UsageSection | null) => void;
   /** Stops counting and sends what was counted. */
   stop: () => void;
 }
 
 /** Starts counting for `uid`, beginning in `initial`. */
-export function startActivityTracking(uid: string, initial: UsageSection): ActivityTracker {
+export function startActivityTracking(uid: string, initial: UsageSection | null): ActivityTracker {
   let section = initial;
   let current: StoredBeat | null = null;
   /** When visible time was last added up; null while hidden. */
@@ -97,7 +100,7 @@ export function startActivityTracking(uid: string, initial: UsageSection): Activ
   };
 
   const markSeen = (now: number) =>
-    writeJSON(LAST_KEY, { uid, section, at: now } satisfies LastSeen);
+    section && writeJSON(LAST_KEY, { uid, section, at: now } satisfies LastSeen);
 
   /**
    * The site is in view in `section` now: a visit starts unless this continues the last one.
@@ -135,6 +138,7 @@ export function startActivityTracking(uid: string, initial: UsageSection): Activ
       arrive(now);
       return;
     }
+    if (section === null) return; // the time passes, uncounted
     if (!current) {
       current = { uid, id: newId(), ms: 0, endedAt: now, sealed: false, section };
       if (visitPending) current.visit = true;
@@ -217,7 +221,7 @@ export function startActivityTracking(uid: string, initial: UsageSection): Activ
     }
   }
 
-  function setSection(next: UsageSection) {
+  function setSection(next: UsageSection | null) {
     if (next === section) return;
     const visible = document.visibilityState === 'visible';
     // The time so far belongs to the section that was on screen until now.
@@ -248,7 +252,7 @@ export function startActivityTracking(uid: string, initial: UsageSection): Activ
 }
 
 /** Counts active time for the signed-in user while the app shell is mounted. */
-export function useActivityTracking(uid: string | undefined, section: UsageSection) {
+export function useActivityTracking(uid: string | undefined, section: UsageSection | null) {
   const tracker = useRef<ActivityTracker | null>(null);
   const sectionRef = useRef(section);
   sectionRef.current = section;

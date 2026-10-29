@@ -762,8 +762,7 @@ export type ContentStatKey =
   | 'moneyIdea'
   | 'income'
   | 'expense'
-  | 'subscription'
-  | 'vault';
+  | 'subscription';
 
 export interface ContentStat {
   key: ContentStatKey;
@@ -816,7 +815,8 @@ export interface ActivityStats {
 
 /**
  * A part of the site whose time is recorded on its own, from the address shown (see
- * `client/src/lib/sections.ts`). Dialogs, panels and query strings never make a section.
+ * `client/src/lib/sections.ts`). Dialogs, panels and query strings never make a section. The
+ * Private Vault is not one: no time, visit or action there is recorded at all.
  */
 export type UsageSection =
   | 'home'
@@ -834,7 +834,6 @@ export type UsageSection =
   | 'projects'
   | 'library'
   | 'documents'
-  | 'vault'
   | 'profile'
   | 'settings'
   | 'other';
@@ -880,8 +879,6 @@ export type UsageAction =
   | 'subscription.paid'
   | 'moneyIdea.created'
   | 'moneyIdea.edited'
-  | 'vault.created'
-  | 'vault.edited'
   | 'link.created';
 
 export interface ActionCount {

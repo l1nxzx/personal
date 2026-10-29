@@ -52,6 +52,8 @@ export interface ActivityMetaRecord {
   recent: { start: number; end: number }[];
   /** Ids of the latest stretches received, so one sent twice counts once. */
   beatIds: string[];
+  /** Usage of the Private Vault, recorded briefly by an earlier version, has been erased. */
+  vaultUsageRemoved?: boolean;
 }
 
 const userDoc = (uid: string) => db().collection('users').doc(uid);
@@ -89,21 +91,26 @@ export async function record(
   });
 }
 
-/** Recomputes the totals from every stored day (reconciliation). */
+/**
+ * Recomputes the totals from every stored day (reconciliation), and writes back the days
+ * `build` returns as changed.
+ */
 export async function rebuild(
   uid: string,
-  build: (meta: ActivityMetaRecord | null, days: ActivityDayRecord[]) => ActivityMetaRecord,
+  build: (
+    meta: ActivityMetaRecord | null,
+    days: ActivityDayRecord[],
+  ) => { meta: ActivityMetaRecord; days: ActivityDayRecord[] },
 ): Promise<void> {
   await db().runTransaction(async (tx) => {
     const [metaSnap, daySnap] = await Promise.all([tx.get(metaRef(uid)), tx.get(daysCol(uid))]);
     const meta = metaSnap.exists ? (metaSnap.data() as ActivityMetaRecord) : null;
-    tx.set(
-      metaRef(uid),
-      build(
-        meta,
-        daySnap.docs.map((d) => d.data() as ActivityDayRecord),
-      ),
+    const next = build(
+      meta,
+      daySnap.docs.map((d) => d.data() as ActivityDayRecord),
     );
+    tx.set(metaRef(uid), next.meta);
+    for (const d of next.days) tx.set(daysCol(uid).doc(d.date), d);
   });
 }
 

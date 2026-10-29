@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import type { ActivityBeat } from '../../../shared/types.js';
 import { z } from 'zod';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { authenticate } from '../middleware/auth.js';
@@ -133,7 +134,8 @@ const activityBody = z
               .min(0)
               .max(7 * 24 * 60 * 60),
             date: localDate,
-            section: z.enum(USAGE_SECTIONS).optional(),
+            // 'vault' only from tabs of an earlier version; that time is dropped.
+            section: z.enum([...USAGE_SECTIONS, 'vault']).optional(),
             visit: z.boolean().optional(),
           })
           .strict(),
@@ -155,7 +157,8 @@ meRoutes.post(
   '/activity',
   validate({ body: activityBody }),
   asyncHandler(async (req, res) => {
-    res.json(await recordActivity(ctxOf(req), req.body.beats));
+    const beats = (req.body.beats as { section?: string }[]).filter((b) => b.section !== 'vault');
+    res.json(await recordActivity(ctxOf(req), beats as ActivityBeat[]));
   }),
 );
 
