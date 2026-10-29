@@ -122,7 +122,7 @@ export async function quoteToNote(ctx: Ctx, bookId: string, quoteId: string): Pr
     body: `> ${quote.text.replace(/\n/g, '\n> ')}${quote.note ? `\n\n${quote.note}` : ''}`,
     sources: [{ id: `book-${book.id}`, label: where, url: null }],
   });
-  await links.add(ctx.userId, `note:${note.id}`, `book:${book.id}`);
+  await links.add(ctx.userId, `note:${note.id}`, `book:${book.id}`, 'manual');
   notifyChange(ctx, 'link');
   return note;
 }

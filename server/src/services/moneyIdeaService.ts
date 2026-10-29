@@ -124,7 +124,7 @@ export async function updateIdea(
   await ideas.update(ctx.userId, id, patch);
   // Linking to a project also shows up in both items' "Linked" lists.
   if (input.projectId && input.projectId !== current.projectId) {
-    await links.add(ctx.userId, `moneyIdea:${id}`, `project:${input.projectId}`);
+    await links.add(ctx.userId, `moneyIdea:${id}`, `project:${input.projectId}`, 'manual');
     notifyChange(ctx, 'link');
   }
   notifyChange(ctx, 'moneyIdea', id);

@@ -209,3 +209,73 @@ describe('links', () => {
     expect(linkRepo.count(user.id)).toBe(0);
   });
 });
+
+describe('words linked to files', () => {
+  const folder = async (agent: Awaited<ReturnType<typeof signedUpAgent>>['agent'], name: string) =>
+    (await agent.post('/api/documents/folders').send({ name, parentId: null }).expect(201)).body
+      .folder as { id: string };
+  const linkedTo = async (
+    agent: Awaited<ReturnType<typeof signedUpAgent>>['agent'],
+    path: string,
+  ) =>
+    (
+      (await agent.get(`/api/links?${path}`).expect(200)).body.items as { ref: { id: string } }[]
+    ).map((l) => l.ref.id);
+
+  it('links the entry while the words are there, and unlinks it when they are gone', async () => {
+    const { agent } = await signedUpAgent();
+    const school = await folder(agent, 'School');
+    const entry = (
+      await agent
+        .post('/api/journal')
+        .send({ date: '2026-10-29', body: `Filed with the [school papers](folder:${school.id}).` })
+        .expect(201)
+    ).body.entry;
+
+    // The folder lists the entry (both sides of the link).
+    expect(await linkedTo(agent, `type=folder&id=${school.id}`)).toEqual([entry.id]);
+
+    // The words are deleted (or unlinked): the link goes too.
+    await agent
+      .patch(`/api/journal/${entry.id}`)
+      .send({ rev: entry.rev, body: 'Filed with the school papers.' })
+      .expect(200);
+    expect(await linkedTo(agent, `type=folder&id=${school.id}`)).toEqual([]);
+    expect(await linkedTo(agent, `type=journal&id=${entry.id}`)).toEqual([]);
+  });
+
+  it('keeps a link added by hand when the linked words go', async () => {
+    const { agent } = await signedUpAgent();
+    const school = await folder(agent, 'School');
+    const entry = (
+      await agent
+        .post('/api/journal')
+        .send({ date: '2026-10-29', body: `See [papers](folder:${school.id}).` })
+        .expect(201)
+    ).body.entry;
+    await agent
+      .post('/api/links')
+      .send({ from: { type: 'journal', id: entry.id }, to: { type: 'folder', id: school.id } })
+      .expect(204);
+    await agent
+      .patch(`/api/journal/${entry.id}`)
+      .send({ rev: entry.rev, body: 'See papers.' })
+      .expect(200);
+    expect(await linkedTo(agent, `type=journal&id=${entry.id}`)).toEqual([school.id]);
+  });
+
+  it('clears links left behind by earlier versions, but never older hand-made ones', async () => {
+    const { agent, user } = await signedUpAgent();
+    const leftover = await folder(agent, 'Leftover');
+    const handMade = await folder(agent, 'Hand made');
+    const entry = (
+      await agent.post('/api/journal').send({ date: '2026-10-29', body: 'No linked words now.' })
+    ).body.entry;
+    const self = `journal:${entry.id}`;
+    linkRepo.seedLegacy(user.id, self, `folder:${leftover.id}`, '2026-10-29T15:00:00.000Z');
+    linkRepo.seedLegacy(user.id, self, `folder:${handMade.id}`, '2026-03-01T09:00:00.000Z');
+
+    expect(await linkedTo(agent, `type=journal&id=${entry.id}`)).toEqual([handMade.id]);
+    expect(await linkedTo(agent, `type=folder&id=${leftover.id}`)).toEqual([]);
+  });
+});
