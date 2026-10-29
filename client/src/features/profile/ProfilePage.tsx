@@ -69,7 +69,6 @@ const CONTENT_LABELS: Record<ContentStatKey, string> = {
   income: 'Income records',
   expense: 'Expenses',
   subscription: 'Subscriptions',
-  vault: 'Encrypted items',
 };
 
 /** Sections of the site, in the order of the navigation. */
@@ -80,7 +79,6 @@ const CONTENT_GROUPS: { title: string; keys: ContentStatKey[] }[] = [
   { title: 'Projects & Tasks', keys: ['project', 'task'] },
   { title: 'Library', keys: ['book'] },
   { title: 'Documents', keys: ['document'] },
-  { title: 'Private Vault', keys: ['vault'] },
 ];
 
 const NOTE_TYPE_LABELS: Record<NoteType, [string, string]> = {
@@ -429,7 +427,7 @@ function HowCounted() {
           Words and characters are counted in what you wrote: journal entries, writings, notes (with
           beliefs and decisions), weekly reviews, timeline moments, book notes, project descriptions
           and money-making ideas. Titles, tags, sources, quoted passages, earlier versions, code
-          blocks and formatting are left out. Files and the vault are never read.
+          blocks and formatting are left out. Files are never read.
         </li>
         <li>
           Only durations, dates, section names, counts and the ids of the items involved are stored,

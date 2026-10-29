@@ -3,9 +3,10 @@ import type { UsageSection } from '../../../shared/types';
 /**
  * The parts of the site whose time is recorded separately, read from the address on screen
  * (the routes in `App.tsx`). An open dialog, panel, search or query string (a task opened with
- * `?task=`, a file previewed with `?doc=`) stays in the section around it.
+ * `?task=`, a file previewed with `?doc=`) stays in the section around it. The Private Vault
+ * gives null: nothing about using it is recorded, not even time.
  */
-export function sectionOf(pathname: string): UsageSection {
+export function sectionOf(pathname: string): UsageSection | null {
   const [first = '', second = ''] = pathname.split('/').filter(Boolean);
   switch (first) {
     case '':
@@ -34,7 +35,7 @@ export function sectionOf(pathname: string): UsageSection {
     case 'documents':
       return 'documents';
     case 'vault':
-      return 'vault';
+      return null;
     case 'profile':
       return 'profile';
     case 'settings':
@@ -68,7 +69,6 @@ export const SECTIONS: Record<UsageSection, SectionInfo> = {
   projects: { label: 'Projects', group: 'Projects & Tasks', to: '/tasks/projects' },
   library: { label: 'Library', group: 'Library', to: '/library' },
   documents: { label: 'Documents', group: 'Documents', to: '/documents' },
-  vault: { label: 'Private Vault', group: 'Private Vault', to: '/vault' },
   profile: { label: 'Profile', group: 'Profile', to: '/profile' },
   settings: { label: 'Settings', group: 'Settings', to: '/settings' },
   other: { label: 'Other pages', group: 'Other', to: null },

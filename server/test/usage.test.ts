@@ -10,6 +10,7 @@ import type {
 import { plausibleLocalDate } from '../src/services/context.js';
 import { recordAction, recordActivity } from '../src/services/activityService.js';
 import { createEntry } from '../src/services/entryService.js';
+import { activityDays } from './memory3.js';
 import { app, signedUpAgent } from './helpers.js';
 
 const MIN = 60 * 1000;
@@ -82,13 +83,13 @@ describe('time per section', () => {
     await recordActivity(ctx, [beat('journal', 60, 0, { visit: true })], NOW);
     await recordActivity(ctx, [beat('money', 60, 0, { visit: true })], NOW + 30_000);
     // A stretch entirely covered by another tab adds no time and no visit.
-    await recordActivity(ctx, [beat('vault', 30, 0, { visit: true })], NOW + 30_000);
+    await recordActivity(ctx, [beat('library', 30, 0, { visit: true })], NOW + 30_000);
 
     const p = await profileOf(agent);
     expect(p.activity.totalSeconds).toBe(90);
     expect(sectionOf(p, 'journal')!.seconds).toBe(60);
     expect(sectionOf(p, 'money')).toMatchObject({ seconds: 30, visits: 1 });
-    expect(sectionOf(p, 'vault')).toBeUndefined();
+    expect(sectionOf(p, 'library')).toBeUndefined();
   });
 
   it('keeps time sent without a section in the totals but in no section', async () => {
@@ -302,5 +303,83 @@ describe('meaningful actions', () => {
     const [day] = (await rangeOf(agent, DATE, DATE)).days;
     expect(day).toMatchObject({ seconds: 60, sessions: 1 });
     expect(actionOf(day!.actions, 'book.created')).toBe(1);
+  });
+});
+
+describe('the Private Vault', () => {
+  it('records nothing about it, and erases what an earlier version kept', async () => {
+    const { agent, user } = await signedUpAgent();
+    const { activityRepo } = await import('./memory3.js');
+    // As stored by the earlier version: 60 s in Journal, 40 s in the vault, one vault item.
+    await activityRepo.record(user.id, [DATE], () => ({
+      meta: {
+        totalSeconds: 100,
+        days: 1,
+        sessions: 1,
+        longestSessionSeconds: 100,
+        firstActiveAt: '2026-10-24T11:58:20.000Z',
+        lastActiveAt: '2026-10-24T12:00:00.000Z',
+        months: {
+          '2026-10': {
+            seconds: 100,
+            days: 1,
+            sections: { journal: { seconds: 60, visits: 1 }, vault: { seconds: 40, visits: 1 } },
+            actions: { 'vault.created': 1 },
+          },
+        },
+        sections: {
+          journal: { seconds: 60, visits: 1, lastAt: '2026-10-24T11:59:20.000Z' },
+          vault: { seconds: 40, visits: 1, lastAt: '2026-10-24T12:00:00.000Z' },
+        },
+        sectionsSince: '2026-10-24T11:58:20.000Z',
+        actions: { 'vault.created': 1 },
+        recentSessions: [],
+        recent: [],
+        beatIds: [],
+      },
+      days: [
+        {
+          date: DATE,
+          seconds: 100,
+          sessions: 1,
+          firstAt: '2026-10-24T11:58:20.000Z',
+          lastAt: '2026-10-24T12:00:00.000Z',
+          sections: {
+            journal: { seconds: 60, visits: 1, lastAt: '2026-10-24T11:59:20.000Z' },
+            vault: { seconds: 40, visits: 1, lastAt: '2026-10-24T12:00:00.000Z' },
+          },
+          actions: { 'vault.created': ['v1'] },
+        },
+      ],
+    }));
+
+    const p = await profileOf(agent);
+    expect(p.activity.totalSeconds).toBe(60);
+    expect(p.activity.sections.map((s) => s.section)).toEqual(['journal']);
+    expect(p.activity.actions).toEqual([]);
+    expect(p.content.items.map((c) => c.key)).not.toContain('vault');
+    // The flag saying it was erased is the only mention left.
+    const vaultData = /"vault"|vault\./;
+    expect(JSON.stringify(activityDays(user.id))).not.toMatch(vaultData);
+    expect(JSON.stringify(await activityRepo.getMeta(user.id))).not.toMatch(vaultData);
+  });
+
+  it('drops vault time sent by a tab of an earlier version, and counts nothing done there', async () => {
+    const { agent } = await signedUpAgent();
+    const date = new Date().toISOString().slice(0, 10);
+    const res = await agent
+      .post('/api/me/activity')
+      .send({
+        beats: [
+          { id: 'vaultbeat1', seconds: 30, ago: 40, date, section: 'vault', visit: true },
+          { id: 'journalbeat', seconds: 30, ago: 0, date, section: 'journal', visit: true },
+        ],
+      })
+      .expect(200);
+    expect(res.body).toEqual({ counted: 30 });
+    const p = await profileOf(agent);
+    expect(p.activity.totalSeconds).toBe(30);
+    expect(p.activity.sections.map((s) => s.section)).toEqual(['journal']);
+    expect(JSON.stringify(await rangeOf(agent, date, date))).not.toContain('vault');
   });
 });

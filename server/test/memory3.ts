@@ -268,7 +268,6 @@ function collectionOf(uid: string, c: StatCollection): Map<string, Doc> {
     income: bucket(stores.income, uid),
     expenses: bucket(stores.expenses, uid),
     subscriptions: bucket(stores.subscriptions, uid),
-    vault: bucket(stores.vaultItems, uid),
   };
   return stores_[c] as Map<string, Doc>;
 }
@@ -360,13 +359,17 @@ export const activityRepo = {
   },
   async rebuild(
     uid: string,
-    build: (meta: ActivityMetaRecord | null, days: ActivityDayRecord[]) => ActivityMetaRecord,
+    build: (
+      meta: ActivityMetaRecord | null,
+      days: ActivityDayRecord[],
+    ) => { meta: ActivityMetaRecord; days: ActivityDayRecord[] },
   ) {
-    const meta = build(
+    const next = build(
       clone(stores.activityMeta.get(uid) ?? null),
       [...daysOf(uid).values()].map(clone),
     );
-    stores.activityMeta.set(uid, clone(meta));
+    stores.activityMeta.set(uid, clone(next.meta));
+    for (const d of next.days) daysOf(uid).set(d.date, clone(d));
   },
   async listDays(uid: string, from: string, to: string) {
     return [...daysOf(uid).values()].filter((d) => d.date >= from && d.date <= to).map(clone);

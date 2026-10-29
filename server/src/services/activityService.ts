@@ -28,7 +28,6 @@ const SECTION_KEYS: Record<UsageSection, true> = {
   projects: true,
   library: true,
   documents: true,
-  vault: true,
   profile: true,
   settings: true,
   other: true,
@@ -60,8 +59,6 @@ const ACTION_KEYS: Record<UsageAction, true> = {
   'subscription.paid': true,
   'moneyIdea.created': true,
   'moneyIdea.edited': true,
-  'vault.created': true,
-  'vault.edited': true,
   'link.created': true,
 };
 /** Every section time can be recorded for (see `client/src/lib/sections.ts`). */
@@ -103,6 +100,7 @@ const emptyMeta = (): Meta => ({
   recentSessions: [],
   recent: [],
   beatIds: [],
+  vaultUsageRemoved: true,
 });
 
 const newDay = (date: string, startIso: string, endIso: string): Day => ({
@@ -254,7 +252,11 @@ export async function recordActivity(
 }
 
 export async function activityStats(ctx: Ctx): Promise<ActivityStats> {
-  const m = (await activity.getMeta(ctx.userId)) ?? emptyMeta();
+  let m = (await activity.getMeta(ctx.userId)) ?? emptyMeta();
+  if (!m.vaultUsageRemoved) {
+    await reconcileActivity(ctx);
+    m = (await activity.getMeta(ctx.userId)) ?? emptyMeta();
+  }
   return {
     totalSeconds: m.totalSeconds,
     days: m.days,
@@ -350,7 +352,6 @@ const CREATED_OF: Partial<Record<UsageAction, UsageAction>> = {
   'project.edited': 'project.created',
   'book.edited': 'book.created',
   'moneyIdea.edited': 'moneyIdea.created',
-  'vault.edited': 'vault.created',
 };
 
 /**
@@ -395,9 +396,32 @@ export async function recordAction(
   }
 }
 
+/**
+ * The vault is private: nothing about using it is kept, not even time or counts. Removes what
+ * an earlier version recorded there from a day (its time leaves the day's total too).
+ */
+function withoutVault(d: Day): Day | null {
+  const section = d.sections?.vault;
+  const actions = Object.keys(d.actions ?? {}).filter((k) => k.startsWith('vault.'));
+  if (!section && !actions.length) return null;
+  const clean = structuredClone(d);
+  if (section) {
+    delete clean.sections!.vault;
+    clean.seconds = Math.max(0, clean.seconds - section.seconds);
+  }
+  for (const k of actions) delete clean.actions![k];
+  return clean;
+}
+
 /** Recomputes the totals from the day documents (the record they are kept in step with). */
 export async function reconcileActivity(ctx: Ctx): Promise<void> {
-  await activity.rebuild(ctx.userId, (stored, days) => {
+  await activity.rebuild(ctx.userId, (stored, storedDays) => {
+    const changed: Day[] = [];
+    const days = storedDays.map((d) => {
+      const clean = withoutVault(d);
+      if (clean) changed.push(clean);
+      return clean ?? d;
+    });
     const meta: Meta = {
       ...(stored ?? emptyMeta()),
       totalSeconds: 0,
@@ -437,6 +461,7 @@ export async function reconcileActivity(ctx: Ctx): Promise<void> {
       meta.firstActiveAt = minIso(meta.firstActiveAt, d.firstAt);
       meta.lastActiveAt = maxIso(meta.lastActiveAt, d.lastAt);
     }
-    return meta;
+    meta.vaultUsageRemoved = true;
+    return { meta, days: changed };
   });
 }

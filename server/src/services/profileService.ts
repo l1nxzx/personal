@@ -32,7 +32,6 @@ const CONTENT: { key: ContentStatKey; collection: stats.StatCollection }[] = [
   { key: 'income', collection: 'income' },
   { key: 'expense', collection: 'expenses' },
   { key: 'subscription', collection: 'subscriptions' },
-  { key: 'vault', collection: 'vault' },
 ];
 
 /** Notes without a type are plain notes; the rest are counted by type. */

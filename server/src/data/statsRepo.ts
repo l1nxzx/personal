@@ -25,8 +25,7 @@ export type StatCollection =
   | 'moneyIdeas'
   | 'income'
   | 'expenses'
-  | 'subscriptions'
-  | 'vault';
+  | 'subscriptions';
 
 export interface StatsMeta {
   /** Version of the text counting rules every stored document has been counted with. */
