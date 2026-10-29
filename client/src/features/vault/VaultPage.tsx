@@ -5,7 +5,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Page, PageHeader } from '../../components/shell/PageHeader';
 import { Button } from '../../components/ui/Button';
 import { Field, Input } from '../../components/ui/Field';
-import { Loading } from '../../components/ui/misc';
+import { ErrorNote } from '../../components/ui/misc';
+import { Skeleton, SkeletonBlock, SkeletonText } from '../../components/ui/Skeleton';
 import { useConfirm } from '../../context/ConfirmContext';
 import { useToast } from '../../context/ToastContext';
 import { errorMessage } from '../../lib/apiFetch';
@@ -32,7 +33,14 @@ export default function VaultPage() {
         }
       />
       {vault.status === 'loading' ? (
-        <Loading />
+        // Shaped like the locked view, by far the usual one.
+        <Skeleton className="mt-6 max-w-sm">
+          <SkeletonText className="text-sm" width="10rem" />
+          <SkeletonText className="mt-5 text-sm" width="7.5rem" />
+          <SkeletonBlock className="mt-1.5 h-10 w-full sm:h-9" />
+        </Skeleton>
+      ) : vault.status === 'error' ? (
+        <ErrorNote onRetry={vault.retryLoad}>{errorMessage(vault.loadError)}</ErrorNote>
       ) : vault.status === 'none' ? (
         <Setup />
       ) : vault.status === 'locked' ? (

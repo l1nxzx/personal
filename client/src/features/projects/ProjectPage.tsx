@@ -7,7 +7,8 @@ import { AutoSaveText } from '../../components/ui/AutoSaveText';
 import { IconButton } from '../../components/ui/Button';
 import { Checkbox } from '../../components/ui/Checkbox';
 import { Menu } from '../../components/ui/Menu';
-import { ErrorNote, Loading, Segmented } from '../../components/ui/misc';
+import { ErrorNote, Segmented } from '../../components/ui/misc';
+import { Skeleton, SkeletonBlock, SkeletonText } from '../../components/ui/Skeleton';
 import { useConfirm } from '../../context/ConfirmContext';
 import { useToast } from '../../context/ToastContext';
 import { useAutosize } from '../../hooks/useAutosize';
@@ -17,7 +18,7 @@ import { formatRelativeDay, today } from '../../lib/dates';
 import { LinksPanel } from '../links/LinksPanel';
 import { AddTask } from '../tasks/AddTask';
 import { useOpenTasks } from '../tasks/api';
-import { TaskRow } from '../tasks/TaskRow';
+import { TaskRow, TaskRowSkeleton } from '../tasks/TaskRow';
 import { TaskList } from '../tasks/TasksPage';
 import { byNextAction } from '../tasks/views';
 import { MomentDialog } from '../timeline/MomentDialog';
@@ -45,15 +46,36 @@ export default function ProjectPage() {
       {project.data ? (
         <ProjectView key={project.data.id} project={project.data} />
       ) : project.isError ? (
-        <ErrorNote>
-          {project.error instanceof ApiError && project.error.status === 404
-            ? 'This project no longer exists.'
-            : errorMessage(project.error)}
-        </ErrorNote>
+        project.error instanceof ApiError && project.error.status === 404 ? (
+          <ErrorNote>This project no longer exists.</ErrorNote>
+        ) : (
+          <ErrorNote onRetry={() => void project.refetch()}>
+            {errorMessage(project.error)}
+          </ErrorNote>
+        )
       ) : (
-        <Loading />
+        <ProjectSkeleton />
       )}
     </Page>
+  );
+}
+
+/** The top of a project while it loads: name, goal, status and date controls, next action. */
+function ProjectSkeleton() {
+  return (
+    <Skeleton>
+      <SkeletonText className="page-title" width="55%" />
+      <SkeletonText className="mt-2 font-serif text-[1.125rem] leading-7" width="80%" />
+      <div className="mt-4 flex gap-3">
+        <SkeletonBlock className="h-9 w-[12.5rem] sm:h-8" />
+        <SkeletonBlock className="h-9 w-32 sm:h-8" />
+      </div>
+      <SkeletonText className="mt-5 text-2xs" width="10rem" />
+      <div className="mt-8 border-l-2 border-line bg-surface py-3 pl-4 pr-3">
+        <SkeletonText className="text-2xs" width="5.5rem" />
+        <TaskRowSkeleton width="55%" />
+      </div>
+    </Skeleton>
   );
 }
 
@@ -197,13 +219,19 @@ function ProjectView({ project }: { project: Project }) {
         )}
       </div>
 
-      {tasks.isSuccess && (
+      {tasks.isSuccess ? (
         <ProgressLine
           className="mt-5"
           done={done.length}
           total={done.length + open.length}
           milestones={milestones}
         />
+      ) : (
+        tasks.isLoading && (
+          <Skeleton className="mt-5">
+            <SkeletonText className="text-2xs" width="10rem" />
+          </Skeleton>
+        )
       )}
 
       <section className="mt-8" aria-labelledby="p-next">
@@ -217,7 +245,9 @@ function ProjectView({ project }: { project: Project }) {
             Next action
           </h2>
           {openTasks.isLoading ? (
-            <Loading />
+            <Skeleton>
+              <TaskRowSkeleton width="55%" />
+            </Skeleton>
           ) : next ? (
             <TaskRow key={next.id} task={next} showProject={false} />
           ) : (
@@ -236,6 +266,13 @@ function ProjectView({ project }: { project: Project }) {
       </section>
 
       <section className="mt-8" aria-labelledby="p-tasks">
+        {openTasks.isLoading && (
+          <Skeleton>
+            <SkeletonText className="mb-1 text-2xs" width="5rem" />
+            <TaskRowSkeleton width="45%" />
+            <div className="mt-1 h-11" />
+          </Skeleton>
+        )}
         {next && (
           <>
             <h2 id="p-tasks" className="section-label mb-1">

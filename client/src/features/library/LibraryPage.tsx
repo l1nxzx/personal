@@ -4,7 +4,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { BookStatus, BookSummary } from '../../../../shared/types';
 import { Page, PageHeader } from '../../components/shell/PageHeader';
 import { Button } from '../../components/ui/Button';
-import { Empty, ErrorNote, Loading, TabLinks } from '../../components/ui/misc';
+import { Empty, ErrorNote, TabLinks } from '../../components/ui/misc';
+import { Skeleton, SkeletonText, skeletonWidth } from '../../components/ui/Skeleton';
 import { useToast } from '../../context/ToastContext';
 import { errorMessage } from '../../lib/apiFetch';
 import { cn } from '../../lib/cn';
@@ -153,7 +154,16 @@ function BooksView() {
       </form>
 
       {books.isLoading ? (
-        <Loading />
+        <Skeleton>
+          <ul className="divide-y divide-line/70">
+            {[0, 1, 2, 3].map((i) => (
+              <li key={i} className="py-3.5">
+                <SkeletonText className="font-serif text-[1.0625rem]" width={skeletonWidth(i)} />
+                <SkeletonText className="text-sm" width="30%" />
+              </li>
+            ))}
+          </ul>
+        </Skeleton>
       ) : books.isError ? (
         <ErrorNote onRetry={() => void books.refetch()}>{errorMessage(books.error)}</ErrorNote>
       ) : !books.data?.length ? (

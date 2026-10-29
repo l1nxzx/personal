@@ -4,6 +4,7 @@ import type { DocumentFile, DocumentFolder } from '../../../../shared/types';
 import { IconButton } from '../../components/ui/Button';
 import { Checkbox } from '../../components/ui/Checkbox';
 import { Menu, type MenuItem } from '../../components/ui/Menu';
+import { Skeleton, SkeletonBlock, SkeletonText, skeletonWidth } from '../../components/ui/Skeleton';
 import { cn } from '../../lib/cn';
 import { formatAgo } from '../../lib/dates';
 import { fileKind, formatSize } from './api';
@@ -395,5 +396,47 @@ function FileCard({ entry, selecting, h }: { entry: Entry; selecting: boolean; h
         <ItemMenu entry={entry} h={h} />
       </span>
     </li>
+  );
+}
+
+/** The folder view while it loads, in the chosen layout: rows with columns, or tiles. */
+export function ItemsSkeleton({ view }: { view: 'list' | 'grid' }) {
+  if (view === 'grid') {
+    return (
+      <Skeleton className="pt-2">
+        <ul className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-3 lg:grid-cols-5">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <li key={i}>
+              <SkeletonBlock className="aspect-[4/3] w-full rounded-sm" />
+              <SkeletonText className="mt-1.5 text-sm" width={skeletonWidth(i)} />
+              <SkeletonText className="text-2xs" width="40%" />
+            </li>
+          ))}
+        </ul>
+      </Skeleton>
+    );
+  }
+  return (
+    <Skeleton>
+      <div className="hidden h-9 border-b border-line sm:block" />
+      <ul className="divide-y divide-line/70 border-b border-line/70 sm:border-b-0">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <li key={i} className={cn(LIST_COLS, 'min-h-[3.25rem]')}>
+            <span />
+            <span className="flex min-w-0 items-center gap-3 py-2">
+              <SkeletonBlock className="h-10 w-10 shrink-0 rounded-sm" />
+              <span className="min-w-0 flex-1">
+                <SkeletonText className="text-[0.9375rem]" width={skeletonWidth(i)} />
+                <SkeletonText className="text-2xs sm:hidden" width="45%" />
+              </span>
+            </span>
+            <SkeletonText className="hidden text-[0.8125rem] sm:block" width="3.5rem" />
+            <SkeletonText className="hidden text-[0.8125rem] sm:block" width="2.5rem" />
+            <SkeletonText className="hidden text-[0.8125rem] sm:block" width="4rem" />
+            <span />
+          </li>
+        ))}
+      </ul>
+    </Skeleton>
   );
 }

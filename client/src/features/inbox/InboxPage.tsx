@@ -10,7 +10,8 @@ import { hrefFor } from '../../lib/routes';
 import { Page, PageHeader } from '../../components/shell/PageHeader';
 import { IconButton } from '../../components/ui/Button';
 import { Menu } from '../../components/ui/Menu';
-import { Empty, ErrorNote, Loading } from '../../components/ui/misc';
+import { Empty, ErrorNote } from '../../components/ui/misc';
+import { Skeleton, SkeletonText, skeletonWidth } from '../../components/ui/Skeleton';
 import { useToast } from '../../context/ToastContext';
 import { useUI } from '../../context/UIContext';
 import { errorMessage } from '../../lib/apiFetch';
@@ -36,7 +37,19 @@ export default function InboxPage() {
         Everything you capture without choosing a place waits here. File it, or just leave it.
       </p>
       {inbox.isLoading ? (
-        <Loading />
+        <Skeleton>
+          <ul className="mt-6 divide-y divide-line/70 border-y border-line/70">
+            {[0, 1, 2].map((i) => (
+              <li key={i} className="py-4">
+                <SkeletonText className="text-[0.9375rem] leading-6" width="92%" />
+                <SkeletonText className="text-[0.9375rem] leading-6" width={skeletonWidth(i)} />
+                <div className="mt-2 flex h-8 items-center">
+                  <SkeletonText className="text-2xs" width="4.5rem" />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Skeleton>
       ) : inbox.isError ? (
         <ErrorNote onRetry={() => void inbox.refetch()}>{errorMessage(inbox.error)}</ErrorNote>
       ) : !inbox.data?.length ? (

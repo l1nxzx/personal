@@ -4,6 +4,7 @@ import type { EntrySummary, SearchResult } from '../../../../shared/types';
 import { Page } from '../../components/shell/PageHeader';
 import { Button } from '../../components/ui/Button';
 import { Empty, ErrorNote, Loading } from '../../components/ui/misc';
+import { Skeleton, SkeletonBlock, SkeletonText, skeletonWidth } from '../../components/ui/Skeleton';
 import { errorMessage } from '../../lib/apiFetch';
 import {
   formatMonthYear,
@@ -76,8 +77,9 @@ export default function JournalPage() {
 
       {searching ? (
         <JournalSearch q={deferredQ} />
-      ) : list.isLoading ? (
-        <Loading />
+      ) : list.isLoading || tags.isLoading ? (
+        // Tags too: their filter row sits above the list and would push it down on arrival.
+        <JournalSkeleton />
       ) : list.isError ? (
         <ErrorNote onRetry={() => void list.refetch()}>{errorMessage(list.error)}</ErrorNote>
       ) : (
@@ -95,6 +97,33 @@ export default function JournalPage() {
         </div>
       )}
     </Page>
+  );
+}
+
+function JournalSkeleton() {
+  return (
+    <Skeleton className="mt-2">
+      <SkeletonText className="pb-2 pt-6 font-serif text-[1.0625rem] font-medium" width="8.5rem" />
+      <ul className="divide-y divide-line/70 border-t border-line/70">
+        {[0, 1, 2, 3].map((i) => (
+          <li
+            key={i}
+            className="grid grid-cols-[2.75rem_1fr] gap-3 py-4 sm:grid-cols-[3.25rem_1fr] sm:gap-4"
+          >
+            <div className="flex flex-col items-center pt-0.5">
+              <SkeletonBlock className="h-6 w-7" />
+              <SkeletonText className="mt-1 text-2xs" width="1.75rem" />
+            </div>
+            <div className="min-w-0">
+              <SkeletonText className="font-serif text-[1.0625rem]" width={skeletonWidth(i)} />
+              <SkeletonText className="mt-0.5 text-sm leading-6" width="100%" />
+              <SkeletonText className="text-sm leading-6" width="72%" />
+              <SkeletonText className="mt-1.5 text-2xs" width="4rem" />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Skeleton>
   );
 }
 

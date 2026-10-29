@@ -115,6 +115,37 @@
     font-variation-settings: 'opsz' 40;
   }
 
+  /*
+   * Loading placeholders (components/ui/Skeleton.tsx). A group stays invisible for a moment so
+   * fast loads show nothing, then fades in; its bars breathe slowly, all in step.
+   */
+  .skeleton {
+    animation: skeleton-in 240ms ease-out 150ms both;
+  }
+  .skeleton-bar {
+    background: rgb(var(--ink) / 0.075);
+    border-radius: 2px;
+    animation: skeleton-pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes skeleton-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes skeleton-pulse {
+    50% {
+      opacity: 0.5;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton {
+      animation-duration: 1ms;
+    }
+    .skeleton-bar {
+      animation: none;
+    }
+  }
+
   /* Rendered Markdown (journal reading view, previews). */
   .prose-entry {
     @apply text-ink;

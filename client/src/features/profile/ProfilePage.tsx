@@ -9,7 +9,8 @@ import type {
 } from '../../../../shared/types';
 import { Page, PageHeader } from '../../components/shell/PageHeader';
 import { Button } from '../../components/ui/Button';
-import { Empty, ErrorNote, Loading } from '../../components/ui/misc';
+import { Empty, ErrorNote } from '../../components/ui/misc';
+import { Skeleton, SkeletonText } from '../../components/ui/Skeleton';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { errorMessage } from '../../lib/apiFetch';
@@ -114,7 +115,7 @@ export default function ProfilePage() {
   return (
     <Page width="default">
       <PageHeader title="Profile" />
-      {profile.isPending && <Loading />}
+      {profile.isPending && <ProfileSkeleton />}
       {profile.isError && (
         <ErrorNote onRetry={() => void profile.refetch()}>{errorMessage(profile.error)}</ErrorNote>
       )}
@@ -129,6 +130,53 @@ export default function ProfilePage() {
         </>
       )}
     </Page>
+  );
+}
+
+/**
+ * While the figures load: the name (already known), then the first two sections with their
+ * real headings and labels, numbers left as placeholders.
+ */
+function ProfileSkeleton() {
+  const { user } = useAuth();
+  const figure = (label: string, large?: boolean, note?: string) => (
+    <Figure
+      large={large}
+      label={label}
+      note={note}
+      value={
+        <Skeleton>
+          <SkeletonText width={large ? '7rem' : '3.5rem'} />
+        </Skeleton>
+      }
+    />
+  );
+  return (
+    <>
+      <section aria-label="You" className="mt-3">
+        <p className="font-serif text-xl text-ink" style={{ fontVariationSettings: "'opsz' 30" }}>
+          {user?.displayName}
+        </p>
+        <Skeleton>
+          <SkeletonText className="mt-1 text-sm" width="15rem" />
+          <SkeletonText className="mt-0.5 text-sm" width="12rem" />
+        </Skeleton>
+      </section>
+      <Section id="profile-time" title="Time here">
+        <div className="grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-3">
+          {figure('Active time', true)}
+          {figure('Days active')}
+          {figure('Sessions')}
+        </div>
+      </Section>
+      <Section id="profile-writing" title="Writing">
+        <div className="grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-3">
+          {figure('Words written', true)}
+          {figure('Characters', false, 'not counting spaces')}
+          {figure('Written entries')}
+        </div>
+      </Section>
+    </>
   );
 }
 

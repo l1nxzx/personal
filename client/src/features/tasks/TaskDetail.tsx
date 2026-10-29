@@ -6,7 +6,8 @@ import type { Subtask, Task, TaskPriority, UpdateTaskRequest } from '../../../..
 import { IconButton } from '../../components/ui/Button';
 import { Checkbox } from '../../components/ui/Checkbox';
 import { Dialog } from '../../components/ui/Dialog';
-import { Loading, Segmented } from '../../components/ui/misc';
+import { Segmented } from '../../components/ui/misc';
+import { Skeleton, SkeletonBlock, SkeletonText } from '../../components/ui/Skeleton';
 import { useConfirm } from '../../context/ConfirmContext';
 import { useToast } from '../../context/ToastContext';
 import { useAutosize } from '../../hooks/useAutosize';
@@ -58,7 +59,17 @@ function TaskDetail({ id, onClose }: { id: string; onClose: () => void }) {
         ) : query.isError ? (
           <p className="text-sm text-ink-muted">{errorMessage(query.error)}</p>
         ) : (
-          <Loading />
+          <Skeleton>
+            <div className="flex items-start gap-3">
+              <SkeletonBlock className="mt-2 h-[18px] w-[18px] shrink-0 rounded-sm" />
+              <SkeletonText
+                className="min-w-0 flex-1 font-serif text-[1.375rem] leading-snug"
+                width="70%"
+              />
+            </div>
+            <SkeletonText className="mt-5 text-sm" width="45%" />
+            <SkeletonText className="mt-1 text-sm" width="60%" />
+          </Skeleton>
         )}
       </div>
     </div>

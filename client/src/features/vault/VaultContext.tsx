@@ -52,10 +52,13 @@ export interface DecryptedItem {
   updatedAt: string;
 }
 
-type Status = 'loading' | 'none' | 'locked' | 'unlocked';
+type Status = 'loading' | 'error' | 'none' | 'locked' | 'unlocked';
 
 interface VaultValue {
   status: Status;
+  /** Why the vault's status couldn't be loaded (status 'error'). */
+  loadError: unknown;
+  retryLoad: () => void;
   items: DecryptedItem[];
   setup: (passphrase: string) => Promise<void>;
   unlock: (passphrase: string) => Promise<void>;
@@ -92,6 +95,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     staleTime: Infinity,
     enabled: !!user,
   });
+  const refetchMeta = meta.refetch;
   const keyRef = useRef<CryptoKey | null>(null);
   const [unlocked, setUnlocked] = useState(false);
   const [items, setItems] = useState<DecryptedItem[]>([]);
@@ -163,7 +167,18 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       setItems((list) => list.filter((x) => x.id !== id));
     };
     return {
-      status: meta.isLoading ? 'loading' : !meta.data ? 'none' : unlocked ? 'unlocked' : 'locked',
+      // A failed load is not "no vault": offering setup then would be wrong.
+      status: meta.isLoading
+        ? 'loading'
+        : meta.isError && meta.data === undefined
+          ? 'error'
+          : !meta.data
+            ? 'none'
+            : unlocked
+              ? 'unlocked'
+              : 'locked',
+      loadError: meta.error,
+      retryLoad: () => void refetchMeta(),
       items,
       touch,
       lock,
@@ -227,7 +242,19 @@ export function VaultProvider({ children }: { children: ReactNode }) {
         await qc.invalidateQueries({ queryKey: ['vault', 'meta'] });
       },
     };
-  }, [meta.isLoading, meta.data, unlocked, items, touch, lock, qc, unlockWith]);
+  }, [
+    meta.isLoading,
+    meta.isError,
+    meta.error,
+    meta.data,
+    refetchMeta,
+    unlocked,
+    items,
+    touch,
+    lock,
+    qc,
+    unlockWith,
+  ]);
 
   // Signing out (or switching user) always locks.
   useEffect(() => {

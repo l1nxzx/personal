@@ -6,12 +6,13 @@ import { Page, PageHeader } from '../../components/shell/PageHeader';
 import { Button } from '../../components/ui/Button';
 import { Menu } from '../../components/ui/Menu';
 import { Empty, ErrorNote, Loading } from '../../components/ui/misc';
+import { Skeleton, SkeletonText } from '../../components/ui/Skeleton';
 import { errorMessage } from '../../lib/apiFetch';
 import { cn } from '../../lib/cn';
 import { formatAgo, relativeDayInline } from '../../lib/dates';
 import { useSearch } from '../me/api';
 import { useNoteList, useTags, useTopics } from './api';
-import { FilterSearch, TagFilter } from './ListParts';
+import { EntryRowsSkeleton, FilterSearch, TagFilter } from './ListParts';
 import { NOTE_TYPES, noteTypeLabel } from './NoteDetails';
 
 /** One knowledge note in a list: title (or its first words), kind, topic, last touched. */
@@ -148,6 +149,13 @@ export default function IdeasPage() {
               </li>
             ))}
           </ul>
+          {topics.isLoading && (
+            <Skeleton className="-mx-2 mt-0.5 space-y-0.5">
+              {['70%', '52%', '62%'].map((w) => (
+                <SkeletonText key={w} className="px-2 py-1.5 text-sm" width={w} />
+              ))}
+            </Skeleton>
+          )}
           {topics.isSuccess && !topics.data.length && (
             <p className="text-[0.8125rem] text-ink-faint">
               Give a note a topic and it will appear here.
@@ -226,8 +234,8 @@ export default function IdeasPage() {
                   q={deferredQ}
                 />
               )
-            ) : list.isLoading ? (
-              <Loading />
+            ) : list.isLoading || tags.isLoading ? (
+              <EntryRowsSkeleton pad="py-3.5" rows={5} />
             ) : list.isError ? (
               <ErrorNote onRetry={() => void list.refetch()}>{errorMessage(list.error)}</ErrorNote>
             ) : !items.length ? (

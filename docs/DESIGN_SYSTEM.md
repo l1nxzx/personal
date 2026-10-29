@@ -19,7 +19,8 @@ Goal: a calm, personal notebook. It must **not** look like a generic AI-made or 
 
 ## Components (`client/src/components`)
 
-- `ui/`: `Button`/`IconButton`, `Checkbox`, `Dialog`, `Field` (`Input`, `Textarea`, `controlClass`), `Menu` (+ `PointMenu` for right-click / long-press menus at a point), `AutoSaveText`, and in `misc.tsx` `Loading`, `Empty`, `ErrorNote`, `TabLinks`, `Segmented`, `Kbd`.
+- `ui/`: `Button`/`IconButton`, `Checkbox`, `Dialog`, `Field` (`Input`, `Textarea`, `controlClass`), `Menu` (+ `PointMenu` for right-click / long-press menus at a point), `AutoSaveText`, `Skeleton` (+ `SkeletonText`, `SkeletonBlock`), and in `misc.tsx` `Loading`, `Empty`, `ErrorNote`, `TabLinks`, `Segmented`, `Kbd`.
+- Loading: pages use skeletons, not spinners. A `Skeleton` group is invisible for 150 ms (fast loads show nothing), fades in, and its bars pulse slowly in step (opacity, 2.4 s); with reduced motion they are still. Bars are `ink` at 7.5% opacity, so they work in both themes. `SkeletonText` takes the real line's type classes and so its exact height. Keep real headings, labels and controls outside the skeleton; only unknown values become bars. `Loading` (a delayed "Loading…" line) remains for dialogs, previews and code-split chunks inside a page.
 - `shell/`: `AppShell`, `Sidebar`, `MobileNav`, `PageHeader` (+ `Page`, `PAGE_FRAME`), `nav.ts` (single list of sections; `short` label for the phone bar).
 - Prefer these over new one-offs. Lists are rows separated by hairlines, not boxed cards. Section headings use `.section-label`.
 

@@ -20,7 +20,8 @@ import {
   useIncomeSummary,
   useUpdateIncome,
 } from './api';
-import { IncomeChart, SourceBars } from './IncomeChart';
+import { IncomeChart, IncomeChartSkeleton, SourceBars } from './IncomeChart';
+import { HistorySkeleton, Pending } from './MoneySkeletons';
 import { MoneyTabs } from './MoneyTabs';
 import {
   amountInput,
@@ -51,6 +52,13 @@ export default function MoneyPage() {
   const [period, setPeriod] = useState<OverviewPeriod>('all');
   const tiles = overviewTiles(summary.data, period, now, cur);
   const hasData = Object.keys(summary.data?.months ?? {}).length > 0;
+  // The figures depend on the base currency too; showing them before both arrive would flash
+  // zeros, or totals in the wrong currency.
+  const loading = summary.isLoading || prefs.isLoading;
+  // Couldn't load: no figures rather than zeros (the error and retry show below the form).
+  const failed = !summary.data && summary.isError;
+  const figure = (amount: number, width: string) =>
+    loading ? <Pending width={width} /> : failed ? '—' : formatMoney(amount, cur);
 
   return (
     <Page width="default">
@@ -92,11 +100,11 @@ export default function MoneyPage() {
             className="mt-1 font-serif text-[2rem] leading-none tabular-nums text-ink"
             style={{ fontVariationSettings: "'opsz' 48" }}
           >
-            {formatMoney(tiles.main.totals.received, cur)}
+            {figure(tiles.main.totals.received, '8rem')}
           </div>
           <div className="mt-1.5 text-sm text-ink-muted">
             received
-            {tiles.main.totals.pending > 0 && (
+            {!loading && tiles.main.totals.pending > 0 && (
               <> · {formatMoney(tiles.main.totals.pending, cur)} pending</>
             )}
           </div>
@@ -105,9 +113,9 @@ export default function MoneyPage() {
           <div key={t.label}>
             <div className="text-2xs uppercase tracking-[0.12em] text-ink-faint">{t.label}</div>
             <div className="mt-1 text-lg tabular-nums text-ink">
-              {formatMoney(t.totals.received, cur)}
+              {figure(t.totals.received, '5.5rem')}
             </div>
-            {t.note && <div className="text-2xs text-ink-faint">{t.note}</div>}
+            {!loading && t.note && <div className="text-2xs text-ink-faint">{t.note}</div>}
           </div>
         ))}
       </section>
@@ -126,7 +134,16 @@ export default function MoneyPage() {
         <ErrorNote onRetry={() => void summary.refetch()}>{errorMessage(summary.error)}</ErrorNote>
       )}
 
-      {hasData && (
+      {loading && (
+        <section aria-labelledby="by-month" className="mt-12">
+          <h2 id="by-month" className="section-label mb-4">
+            By month
+          </h2>
+          <IncomeChartSkeleton />
+        </section>
+      )}
+
+      {!loading && hasData && (
         <>
           <section aria-labelledby="by-month" className="mt-12">
             <h2 id="by-month" className="section-label mb-4">
@@ -305,7 +322,9 @@ function IncomeForm({
   onDone?: () => void;
 }) {
   const [amount, setAmount] = useState(entry ? amountInput(entry.amountMinor, entry.currency) : '');
-  const [currency, setCurrency] = useState(entry?.currency ?? defaultCurrency);
+  // Unset until picked, so a default that arrives after the form appears still applies.
+  const [picked, setCurrency] = useState<string | null>(entry?.currency ?? null);
+  const currency = picked ?? defaultCurrency;
   const [source, setSource] = useState(entry?.source ?? '');
   const [date, setDate] = useState(entry?.date ?? today());
   const [status, setStatus] = useState<IncomeStatus>(entry?.status ?? 'received');
@@ -456,7 +475,7 @@ function History({ onEdit }: { onEdit: (id: string) => void }) {
         History
       </h2>
       {list.isLoading ? (
-        <Loading />
+        <HistorySkeleton />
       ) : list.isError ? (
         <ErrorNote onRetry={() => void list.refetch()}>{errorMessage(list.error)}</ErrorNote>
       ) : !entries.length ? (

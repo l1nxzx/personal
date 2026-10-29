@@ -5,7 +5,8 @@ import { Link } from 'react-router-dom';
 import type { Task } from '../../../../shared/types';
 import { Page, PageHeader } from '../../components/shell/PageHeader';
 import { Button, IconButton } from '../../components/ui/Button';
-import { Empty, ErrorNote, Loading, TabLinks } from '../../components/ui/misc';
+import { Empty, ErrorNote, TabLinks } from '../../components/ui/misc';
+import { Skeleton, SkeletonText, skeletonWidth } from '../../components/ui/Skeleton';
 import { useToast } from '../../context/ToastContext';
 import { errorMessage } from '../../lib/apiFetch';
 import { formatRelativeDay, toLocalDate, today } from '../../lib/dates';
@@ -14,7 +15,7 @@ import { useProjects } from '../projects/api';
 import { ProjectsView } from '../projects/ProjectsPage';
 import { AddTask } from './AddTask';
 import { useDoneTasks, useOpenTasks, useUpdateTask } from './api';
-import { TaskRow } from './TaskRow';
+import { TaskRow, TaskRowSkeleton } from './TaskRow';
 import { byNextAction, openByProject, todayGroups, upcomingGroups } from './views';
 
 export type TaskView = 'today' | 'upcoming' | 'done' | 'all' | 'projects';
@@ -37,6 +38,13 @@ export function TaskList({
       ))}
     </ul>
   );
+}
+
+/** Placeholder task rows, for use inside a Skeleton. */
+function TaskListSkeleton({ rows }: { rows: number }) {
+  return Array.from({ length: rows }, (_, i) => (
+    <TaskRowSkeleton key={i} width={skeletonWidth(i)} meta={i % 2 === 1} />
+  ));
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -81,7 +89,12 @@ function OpenView({ view }: { view: Exclude<TaskView, 'done' | 'projects'> }) {
   const t = today();
 
   const body = () => {
-    if (open.isLoading) return <Loading />;
+    if (open.isLoading)
+      return (
+        <Skeleton className="mt-4">
+          <TaskListSkeleton rows={4} />
+        </Skeleton>
+      );
     if (open.isError)
       return <ErrorNote onRetry={() => void open.refetch()}>{errorMessage(open.error)}</ErrorNote>;
     const tasks = open.data ?? [];
@@ -275,7 +288,13 @@ function ByProject({ tasks }: { tasks: Task[] }) {
 
 function DoneView() {
   const done = useDoneTasks();
-  if (done.isLoading) return <Loading />;
+  if (done.isLoading)
+    return (
+      <Skeleton>
+        <SkeletonText className="pb-2 pt-6 font-serif text-[1.0625rem]" width="6rem" />
+        <TaskListSkeleton rows={4} />
+      </Skeleton>
+    );
   if (done.isError)
     return <ErrorNote onRetry={() => void done.refetch()}>{errorMessage(done.error)}</ErrorNote>;
   const tasks = done.data?.pages.flatMap((p) => p.items) ?? [];
