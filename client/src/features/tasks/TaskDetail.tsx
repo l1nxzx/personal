@@ -141,7 +141,7 @@ function DateChips({
       ))}
       <label
         className={cn(
-          'relative h-9 cursor-pointer rounded-sm px-2.5 text-[0.8125rem] leading-9 sm:h-7 sm:leading-7',
+          'relative h-9 cursor-pointer overflow-hidden rounded-sm px-2.5 text-[0.8125rem] leading-9 sm:h-7 sm:leading-7',
           custom
             ? 'bg-accent/15 text-ink ring-1 ring-accent/50'
             : 'bg-surface-2/70 text-ink-muted hover:text-ink',
@@ -152,7 +152,7 @@ function DateChips({
           type="date"
           value={value ?? ''}
           onChange={(e) => onChange(e.target.value || null)}
-          className="absolute inset-0 cursor-pointer opacity-0"
+          className="absolute inset-0 h-full w-full min-w-0 cursor-pointer opacity-0"
           aria-label="Pick a date"
         />
       </label>

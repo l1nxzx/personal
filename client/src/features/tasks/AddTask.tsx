@@ -64,7 +64,7 @@ export function AddTask({
       />
       <label
         className={cn(
-          'relative flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded px-2 text-2xs transition-colors hover:bg-surface-2 sm:h-8',
+          'relative flex h-9 shrink-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded px-2 text-2xs transition-colors hover:bg-surface-2 sm:h-8',
           due ? 'text-ink-muted' : 'text-ink-faint',
         )}
         title="Due date (optional)"
@@ -78,7 +78,7 @@ export function AddTask({
           value={due}
           onChange={(e) => setDue(e.target.value)}
           aria-label="Due date (optional)"
-          className="absolute inset-0 cursor-pointer opacity-0"
+          className="absolute inset-0 h-full w-full min-w-0 cursor-pointer opacity-0"
         />
       </label>
       {title.trim() && (

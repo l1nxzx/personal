@@ -176,14 +176,14 @@ function ProjectView({ project }: { project: Project }) {
             { value: 'done', label: 'Done' },
           ]}
         />
-        <label className="relative inline-flex h-9 cursor-pointer items-center rounded border border-line px-3 text-sm text-ink-muted hover:border-line-strong sm:h-8">
+        <label className="relative inline-flex h-9 cursor-pointer items-center overflow-hidden rounded border border-line px-3 text-sm text-ink-muted hover:border-line-strong sm:h-8">
           {project.targetDate ? targetLabel(project.targetDate, t) : 'Set a target date'}
           <input
             type="date"
             value={project.targetDate ?? ''}
             onChange={(e) => save({ targetDate: e.target.value || null })}
             aria-label="Target date"
-            className="absolute inset-0 cursor-pointer opacity-0"
+            className="absolute inset-0 h-full w-full min-w-0 cursor-pointer opacity-0"
           />
         </label>
         {project.targetDate && (

@@ -526,7 +526,7 @@ function Editor({
 /** The journal date reads as text; tapping it opens the native date picker. */
 function DateField({ value, onChange }: { value: string; onChange: (d: string) => void }) {
   return (
-    <label className="relative mb-3 inline-flex cursor-pointer items-center text-[0.8125rem] font-medium uppercase tracking-[0.1em] text-ink-faint hover:text-ink-muted">
+    <label className="relative mb-3 inline-flex cursor-pointer items-center overflow-hidden text-[0.8125rem] font-medium uppercase tracking-[0.1em] text-ink-faint hover:text-ink-muted">
       {formatLongDate(value)}
       <input
         type="date"
@@ -534,7 +534,7 @@ function DateField({ value, onChange }: { value: string; onChange: (d: string) =
         max="9999-12-31"
         onChange={(e) => e.target.value && onChange(e.target.value)}
         aria-label="Entry date"
-        className="absolute inset-0 cursor-pointer opacity-0"
+        className="absolute inset-0 h-full w-full min-w-0 cursor-pointer opacity-0"
       />
     </label>
   );
