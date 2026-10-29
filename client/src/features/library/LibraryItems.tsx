@@ -34,6 +34,8 @@ export interface ItemHandlers {
   onDropOnFolder: (folderId: string, ev: React.DragEvent) => void;
   /** "Taxes / 2025" under each item, for search results and Recent/Starred. */
   locate?: (folderId: string | null) => string;
+  /** Bytes stored in a folder and below it; undefined until known. */
+  folderBytes?: (folderId: string) => number | undefined;
 }
 
 /** Shown on hover or focus with a mouse; always shown on touch screens (no hover there). */
@@ -170,6 +172,8 @@ function ListRow({ entry, h }: { entry: Entry; h: ItemHandlers }) {
   const added = isFolder ? entry.folder.createdAt : entry.file.createdAt;
   const kind = isFolder ? 'Folder' : fileKind(entry.file.mime, entry.file.name);
   const where = h.locate?.(isFolder ? entry.folder.parentId : entry.file.folderId);
+  const bytes = isFolder ? h.folderBytes?.(entry.folder.id) : entry.file.size;
+  const size = bytes === undefined ? null : formatSize(bytes);
 
   return (
     <li
@@ -212,7 +216,7 @@ function ListRow({ entry, h }: { entry: Entry; h: ItemHandlers }) {
             {name}
           </span>
           <span className="block truncate text-2xs text-ink-faint sm:hidden">
-            {isFolder ? 'Folder' : `${kind} · ${formatSize(entry.file.size)}`} · {formatAgo(added)}
+            {[kind, size, formatAgo(added)].filter(Boolean).join(' · ')}
             {where !== undefined && ` · ${where}`}
           </span>
           {where !== undefined && (
@@ -222,7 +226,7 @@ function ListRow({ entry, h }: { entry: Entry; h: ItemHandlers }) {
       </button>
       <span className="hidden truncate text-[0.8125rem] text-ink-muted sm:block">{kind}</span>
       <span className="hidden text-[0.8125rem] tabular-nums text-ink-muted sm:block">
-        {isFolder ? '—' : formatSize(entry.file.size)}
+        {size ?? '—'}
       </span>
       <span className="hidden truncate text-[0.8125rem] text-ink-muted sm:block">
         {formatAgo(added)}
@@ -298,6 +302,8 @@ function FolderTile({
   );
   if (entry.kind !== 'folder') return null;
   const where = h.locate?.(entry.folder.parentId);
+  const bytes = h.folderBytes?.(entry.folder.id);
+  const note = where ?? (bytes === undefined ? undefined : formatSize(bytes));
   return (
     <li
       draggable
@@ -333,7 +339,7 @@ function FolderTile({
         className="flex h-full min-w-0 flex-1 flex-col justify-center pl-2.5 text-left"
       >
         <span className="truncate text-sm font-medium text-ink">{entry.folder.name}</span>
-        {where !== undefined && <span className="truncate text-2xs text-ink-faint">{where}</span>}
+        {note !== undefined && <span className="truncate text-2xs text-ink-faint">{note}</span>}
       </button>
       <ItemMenu entry={entry} h={h} />
     </li>

@@ -76,8 +76,10 @@ function derived(
   },
 ) {
   const d = r.decision;
+  // A belief is about where you stand: lists show the latest position before any notes.
+  const stand = [...r.perspectives].sort((a, b) => a.date.localeCompare(b.date)).at(-1);
   return {
-    excerpt: excerpt(r.body),
+    excerpt: excerpt(stand?.position.trim() ? stand.position : r.body),
     wordCount: wordCount(r.body),
     ...textStatsOf(kind, r),
     searchTerms: buildSearchTerms(
@@ -158,7 +160,8 @@ export async function createEntry(
     tags: normalizeTags(input.tags ?? []),
     ...(isNote ? await canonicalTopic(ctx, input.topic) : { topic: null, topicKey: null }),
     sources: isNote ? cleanSources(input.sources ?? []) : [],
-    perspectives: [] as Perspective[],
+    perspectives:
+      isNote && input.noteType === 'belief' ? (input.perspectives ?? []) : ([] as Perspective[]),
   };
   const record: entries.EntryRecord = {
     id,
@@ -171,7 +174,7 @@ export async function createEntry(
     createdAt: now,
     updatedAt: now,
     noteType: isNote ? (input.noteType ?? 'note') : null,
-    lastConsidered: null,
+    lastConsidered: latestDate(base.perspectives),
     decision:
       isNote && input.noteType === 'decision'
         ? cleanDecision({ madeOn: null } as DecisionMeta)

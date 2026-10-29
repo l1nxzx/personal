@@ -578,6 +578,9 @@ export const documentRepo = {
   async listInFolders(uid: string, folderIds: string[]) {
     return [...docs(uid).values()].filter((d) => folderIds.some((f) => inFolder(d, f))).map(clone);
   },
+  async listSizes(uid: string) {
+    return [...docs(uid).values()].map((d) => ({ folderId: d.folderId ?? null, size: d.size }));
+  },
   async countInFolders(uid: string, folderIds: string[]) {
     return [...docs(uid).values()].filter((d) => folderIds.some((f) => inFolder(d, f))).length;
   },

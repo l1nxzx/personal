@@ -7,6 +7,7 @@ import type {
   CreateFolderRequest,
   DocumentFile,
   DocumentFolder,
+  FolderSizes,
   Entry,
   FolderUsage,
   LibrarySelection,
@@ -154,6 +155,18 @@ export function useFolders() {
   });
 }
 
+/**
+ * Stored bytes per folder, through every level. Costs one small read per file, so it is kept
+ * for a while; any library change (here or on another device) refreshes it.
+ */
+export function useFolderSizes() {
+  return useQuery({
+    queryKey: ['documents', 'folder-sizes'],
+    queryFn: async () => (await apiFetch<{ sizes: FolderSizes }>('/documents/folders/sizes')).sizes,
+    staleTime: 10 * 60_000,
+  });
+}
+
 export function useDocument(id: string | null) {
   return useQuery({
     queryKey: ['document', id],
@@ -282,7 +295,9 @@ export const fileUrl = (id: string, opts: { download?: boolean; thumb?: boolean 
 export function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+  if (bytes < 1024 ** 3)
+    return `${(bytes / 1024 / 1024).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+  return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 }
 
 export function fileKind(mime: string, name: string): string {

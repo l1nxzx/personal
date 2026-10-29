@@ -83,6 +83,20 @@ export function formatAgo(iso: string): string {
   return formatRelativeDay(local);
 }
 
+const fmtExact = new Intl.DateTimeFormat(undefined, {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  second: '2-digit',
+  timeZoneName: 'short',
+});
+
+/** "Thursday, 29 October 2026 at 10:16:03 CET": to the second, in this device's time zone. */
+export const formatExact = (iso: string) => fmtExact.format(new Date(iso));
+
 export function greeting(d = new Date()): string {
   const h = d.getHours();
   if (h < 5) return 'Good evening';

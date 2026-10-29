@@ -98,6 +98,7 @@ describe('documents', () => {
 
     const file = await binary(agent.get(`/api/documents/${doc.id}/file`)).expect(200);
     expect(file.headers['content-disposition']).toMatch(/^inline/);
+    expect(file.headers['cache-control']).toBe('private, max-age=31536000, immutable');
     const meta = await sharp(file.body as Buffer).metadata();
     expect(Math.max(meta.width!, meta.height!)).toBe(2400);
     expect(meta.exif).toBeUndefined();
@@ -292,6 +293,22 @@ describe('library folders', () => {
       .post('/api/documents/move')
       .send({ fileIds: [one.id], targetId: 'gone' })
       .expect(404);
+  });
+
+  it('adds up stored bytes per folder, through every level below it', async () => {
+    const { agent } = await signedUpAgent();
+    const parent = await mkdir(agent, 'Parent');
+    const child = await mkdir(agent, 'Child', parent.id);
+    const empty = await mkdir(agent, 'Empty');
+    await upload(agent, 'a.pdf', parent.id); // "%PDF a.pdf" = 10 bytes
+    await upload(agent, 'bb.pdf', child.id); // 11 bytes
+    await upload(agent, 'top.pdf'); // 12 bytes, at the top level
+
+    const { sizes } = (await agent.get('/api/documents/folders/sizes').expect(200)).body;
+    expect(sizes.folders[parent.id]).toEqual({ bytes: 21, files: 2 });
+    expect(sizes.folders[child.id]).toEqual({ bytes: 11, files: 1 });
+    expect(sizes.folders[empty.id]).toBeUndefined();
+    expect(sizes.total).toEqual({ bytes: 33, files: 3 });
   });
 
   it('never deletes a non-empty folder unless asked what to do with its contents', async () => {

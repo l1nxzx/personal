@@ -1,16 +1,27 @@
-import { Bold, Heading2, Italic, Link2, List, ListChecks, Quote } from 'lucide-react';
+import { Bold, Heading2, Italic, Link2, List, ListChecks, Paperclip, Quote } from 'lucide-react';
 import { forwardRef, useImperativeHandle, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { useAutosize } from '../../hooks/useAutosize';
 import { cn } from '../../lib/cn';
 import { isMod } from '../../lib/hotkeys';
-import { applyEdit, continueList, link, togglePrefix, wrap, type Edit } from './markdown';
+import { applyEdit, continueList, link, linkTo, togglePrefix, wrap, type Edit } from './markdown';
 
-export type FormatAction = 'heading' | 'bold' | 'italic' | 'quote' | 'list' | 'check' | 'link';
+/** `file` links the selected words to a file or folder; the page opens the picker for it. */
+export type FormatAction =
+  'heading' | 'bold' | 'italic' | 'quote' | 'list' | 'check' | 'link' | 'file';
+
+export interface TextRange {
+  start: number;
+  end: number;
+}
 
 export interface MarkdownEditorHandle {
   format: (action: FormatAction) => void;
   focus: () => void;
+  /** The selection (kept by the textarea even after it loses focus). */
+  selection: () => TextRange;
+  /** Turns `range` into a link to `url`; with an empty range, inserts `fallback` as the text. */
+  linkRange: (range: TextRange, url: string, fallback: string) => void;
 }
 
 const FORMAT_BUTTONS: { action: FormatAction; label: string; icon: ReactNode }[] = [
@@ -21,6 +32,7 @@ const FORMAT_BUTTONS: { action: FormatAction; label: string; icon: ReactNode }[]
   { action: 'list', label: 'Bulleted list', icon: <List /> },
   { action: 'check', label: 'Checklist', icon: <ListChecks /> },
   { action: 'link', label: 'Link', icon: <Link2 /> },
+  { action: 'file', label: 'Link words to a file or folder', icon: <Paperclip /> },
 ];
 
 /** A row of the few formatting actions worth a button. Everything else is plain Markdown. */
@@ -100,6 +112,12 @@ export const MarkdownEditor = forwardRef<
   useImperativeHandle(ref, () => ({
     format,
     focus: () => el.current?.focus({ preventScroll: true }),
+    selection: () => ({
+      start: el.current?.selectionStart ?? value.length,
+      end: el.current?.selectionEnd ?? value.length,
+    }),
+    linkRange: (r, url, fallback) =>
+      el.current && run(linkTo(el.current.value, r.start, r.end, url, fallback)),
   }));
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

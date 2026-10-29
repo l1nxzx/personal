@@ -24,6 +24,19 @@ interface Current {
   tags: string[];
 }
 
+const versionsKey = (kind: EntryKind, entryId: string) => ['versions', kind, entryId];
+
+/** The saved versions of one entry. */
+export function useVersions(kind: EntryKind, entryId: string | null) {
+  return useQuery({
+    queryKey: versionsKey(kind, entryId ?? ''),
+    queryFn: async () =>
+      (await apiFetch<{ items: EntryVersionSummary[] }>(`${ENTRY_API[kind]}/${entryId}/versions`))
+        .items,
+    enabled: !!entryId,
+  });
+}
+
 /**
  * Earlier versions of a piece of writing: taken automatically every so often while editing,
  * or kept by hand. Read one, compare it with the current text, or bring it back.
@@ -81,13 +94,8 @@ function Panel({
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
-  const key = ['versions', kind, entryId];
-  const list = useQuery({
-    queryKey: key,
-    queryFn: async () =>
-      (await apiFetch<{ items: EntryVersionSummary[] }>(`${ENTRY_API[kind]}/${entryId}/versions`))
-        .items,
-  });
+  const key = versionsKey(kind, entryId);
+  const list = useVersions(kind, entryId);
   const [selected, setSelected] = useState<string | null>(null);
   const [label, setLabel] = useState('');
   const keep = useMutation({

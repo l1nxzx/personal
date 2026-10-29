@@ -54,6 +54,8 @@ const createBody = z.object({
   noteType: noteType.optional(),
   topic: topic.optional(),
   sources: sources.optional(),
+  /** Beliefs: where you stand can be written before anything else. */
+  perspectives: perspectives.optional(),
 });
 
 const updateBody = z

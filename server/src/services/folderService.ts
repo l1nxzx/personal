@@ -1,6 +1,7 @@
 import type {
   CreateFolderRequest,
   DocumentFolder,
+  FolderSizes,
   FolderUsage,
   LibrarySelection,
   MoveItemsRequest,
@@ -220,6 +221,32 @@ export async function folderUsage(ctx: Ctx, folderIds: string[]): Promise<Folder
     files: ids.size ? await documents.countInFolders(ctx.userId, [...ids]) : 0,
     folders: ids.size - new Set(roots).size,
   };
+}
+
+/**
+ * Bytes and files in every folder, including everything below it. One small read per file, so
+ * the client keeps the answer cached until the library changes.
+ */
+export async function folderSizes(ctx: Ctx): Promise<FolderSizes> {
+  const [all, files] = await Promise.all([
+    folders.listAll(ctx.userId),
+    documents.listSizes(ctx.userId),
+  ]);
+  const parent = new Map(all.map((f) => [f.id, f.parentId]));
+  const out: FolderSizes = { folders: {}, total: { bytes: 0, files: 0 } };
+  for (const file of files) {
+    out.total.bytes += file.size;
+    out.total.files += 1;
+    // Count the file in its folder and every folder above it.
+    const seen = new Set<string>();
+    for (let id = file.folderId; id && parent.has(id) && !seen.has(id); id = parent.get(id)!) {
+      seen.add(id);
+      const s = (out.folders[id] ??= { bytes: 0, files: 0 });
+      s.bytes += file.size;
+      s.files += 1;
+    }
+  }
+  return out;
 }
 
 /** "Item (2)", "Item (3)"… until the name is free among `taken`. */

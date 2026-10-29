@@ -5,6 +5,8 @@ import {
   Ellipsis,
   Eye,
   History,
+  Info,
+  Paperclip,
   Maximize2,
   Milestone,
   Minimize2,
@@ -14,9 +16,10 @@ import {
   Trash2,
   Type,
 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import type { Entry, EntryKind, NoteMeta, NoteType } from '../../../../shared/types';
+import type { Entry, EntryKind, NoteMeta, NoteType, Perspective } from '../../../../shared/types';
 import { Button, IconButton } from '../../components/ui/Button';
 import { Menu } from '../../components/ui/Menu';
 import { ErrorNote, Loading } from '../../components/ui/misc';
@@ -28,17 +31,28 @@ import { ApiError, errorMessage } from '../../lib/apiFetch';
 import { cn } from '../../lib/cn';
 import { formatAgo, formatLongDate, today } from '../../lib/dates';
 import { isMod, useKeydown } from '../../lib/hotkeys';
+import { keys } from '../../lib/keys';
 import { ENTRY_LIST } from '../../lib/routes';
 import { readJSON, writeJSON } from '../../lib/storage';
+import { anchorsIn, anchorUrl, type AnchorRef } from '../../lib/anchors';
+import { FilePicker } from '../library/FilePicker';
+import { useLinkMutations } from '../links/api';
 import { LinksPanel } from '../links/LinksPanel';
 import { usePrefs } from '../me/api';
 import { useDeleteEntry, useEntry, usePatchEntryMeta, useSetEntryFlags } from './api';
-import { FormatBar, MarkdownEditor, type MarkdownEditorHandle } from './MarkdownEditor';
+import {
+  FormatBar,
+  MarkdownEditor,
+  type FormatAction,
+  type MarkdownEditorHandle,
+  type TextRange,
+} from './MarkdownEditor';
 import { MomentDialog } from '../timeline/MomentDialog';
-import { DecisionPanel, NotePanel, PerspectivesPanel } from './NoteDetails';
+import { BeliefStand, DecisionPanel, NotePanel } from './NoteDetails';
 import { TagInput } from './TagInput';
 import { useEntryEditor, type SaveStatus } from './useEntryEditor';
 import { VersionHistory } from './VersionHistory';
+import { EntryMetadata } from './EntryMetadata';
 
 const MarkdownView = lazy(() => import('./MarkdownView'));
 
@@ -156,6 +170,7 @@ function Editor({
 }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const qc = useQueryClient();
   const confirm = useConfirm();
   const toast = useToast();
   const prefs = usePrefs();
@@ -173,10 +188,13 @@ function Editor({
   );
 
   // A new note's kind/topic/sources are kept here until its first save creates it.
-  const [pendingNote, setPendingNote] = useState<Pick<NoteMeta, 'noteType' | 'topic' | 'sources'>>({
+  const [pendingNote, setPendingNote] = useState<
+    Pick<NoteMeta, 'noteType' | 'topic' | 'sources' | 'perspectives'>
+  >({
     noteType: seed?.noteType ?? 'note',
     topic: seed?.topic ?? null,
     sources: [],
+    perspectives: [],
   });
   const pendingNoteRef = useRef(pendingNote);
   pendingNoteRef.current = pendingNote;
@@ -199,6 +217,10 @@ function Editor({
   const [mode, setMode] = useState<'write' | 'read'>('write');
   const [focusMode, setFocusMode] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [metaOpen, setMetaOpen] = useState(false);
+  // Linking words to a file: the selection is remembered while the picker is open.
+  const [filePick, setFilePick] = useState<{ range: TextRange; words: string } | null>(null);
+  const { add: addLink } = useLinkMutations();
   const [momentOpen, setMomentOpen] = useState(false);
   const [showFormat, setShowFormat] = useState(
     () => readJSON<boolean>('editor:formatbar') ?? false,
@@ -209,19 +231,62 @@ function Editor({
 
   const flags = useSetEntryFlags(kind);
   const patchMeta = usePatchEntryMeta(kind);
-  const noteMeta: NoteMeta = live?.note ?? { ...pendingNote, perspectives: [], decision: null };
-  const changeNote = (patch: Partial<NoteMeta>) => {
-    if (!ed.id) return setPendingNote((p) => ({ ...p, ...patch }));
+  const noteMeta: NoteMeta = live?.note ?? { ...pendingNote, decision: null };
+  const isBelief = kind === 'note' && noteMeta.noteType === 'belief';
+  // A belief can start with where you stand, before it has a title or notes: that creates it.
+  const changeStand = (perspectives: Perspective[]) => {
+    if (ed.id) return changeNote({ perspectives });
+    pendingNoteRef.current = { ...pendingNoteRef.current, perspectives };
+    setPendingNote(pendingNoteRef.current);
+    void ed.ensureCreated().then((id) => {
+      // Created by an earlier save (from the title, say) that didn't have these yet.
+      const saved = id ? qc.getQueryData<Entry>(keys.entry(kind, id))?.note?.perspectives : null;
+      if (id && JSON.stringify(saved) !== JSON.stringify(perspectives))
+        saveNote(id, { perspectives });
+    });
+  };
+  const saveNote = (id: string, patch: Partial<NoteMeta>) =>
     patchMeta.mutate(
-      { id: ed.id, patch },
+      { id, patch },
       { onError: (err) => toast({ message: `Not saved: ${errorMessage(err)}`, tone: 'error' }) },
     );
+  const changeNote = (patch: Partial<NoteMeta>) => {
+    if (!ed.id) return setPendingNote((p) => ({ ...p, ...patch }));
+    saveNote(ed.id, patch);
   };
   const del = useDeleteEntry(kind);
 
+  const pickFileForWords = () => {
+    const range = editorRef.current?.selection() ?? {
+      start: ed.fields.body.length,
+      end: ed.fields.body.length,
+    };
+    setFilePick({ range, words: ed.fields.body.slice(range.start, range.end).trim() });
+  };
+  const linkWords = (ref: AnchorRef, name: string) => {
+    const pick = filePick;
+    setFilePick(null);
+    if (!pick) return;
+    editorRef.current?.linkRange(pick.range, anchorUrl(ref), name);
+    // Also link the whole entry, so the file lists it too ("Linked" works both ways).
+    void (ed.id ? Promise.resolve(ed.id) : ed.ensureCreated()).then((id) => {
+      if (!id) return;
+      addLink.mutate(
+        { from: { type: kind, id }, to: ref },
+        { onError: (err) => toast({ message: errorMessage(err), tone: 'error' }) },
+      );
+    });
+    toast({ message: `Linked ${pick.words ? `“${pick.words}”` : 'it'} to ${name}` });
+  };
+  const onFormat = (a: FormatAction) =>
+    a === 'file' ? pickFileForWords() : editorRef.current?.format(a);
+
   // Start typing straight away in a new entry.
   useEffect(() => {
-    if (!entry) setTimeout(() => editorRef.current?.focus(), 0);
+    // A new belief starts with naming it; where you stand comes right under the title.
+    if (!entry)
+      setTimeout(() => (isBelief ? titleRef.current?.focus() : editorRef.current?.focus()), 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entry]);
 
   useKeydown((e) => {
@@ -358,6 +423,15 @@ function Editor({
                 </IconButton>
               )}
               items={[
+                ...(mode === 'write'
+                  ? [
+                      {
+                        label: 'Link words to a file…',
+                        icon: <Paperclip />,
+                        onSelect: pickFileForWords,
+                      },
+                    ]
+                  : []),
                 ...(kind !== 'journal' && live
                   ? [
                       {
@@ -378,6 +452,12 @@ function Editor({
                   : []),
                 ...(ed.id
                   ? [
+                      {
+                        label: 'Metadata',
+                        icon: <Info />,
+                        // Save first, so "last modified" and the counts agree.
+                        onSelect: () => void ed.flush().then(() => setMetaOpen(true)),
+                      },
                       {
                         label: 'Version history',
                         icon: <History />,
@@ -403,7 +483,7 @@ function Editor({
         </div>
         {showFormat && mode === 'write' && !focusMode && (
           <div className="mx-auto max-w-[52rem] border-t border-line px-2 py-1 sm:px-4">
-            <FormatBar onFormat={(a) => editorRef.current?.format(a)} />
+            <FormatBar onFormat={onFormat} />
           </div>
         )}
       </div>
@@ -432,7 +512,13 @@ function Editor({
               }}
               rows={1}
               maxLength={300}
-              placeholder={kind === 'journal' ? 'Title (optional)' : 'Untitled'}
+              placeholder={
+                kind === 'journal'
+                  ? 'Title (optional)'
+                  : isBelief
+                    ? 'The belief, in a few words'
+                    : 'Untitled'
+              }
               aria-label="Title"
               className="block w-full resize-none overflow-hidden bg-transparent font-serif text-[1.625rem] font-medium leading-tight tracking-[-0.01em] text-ink placeholder:text-ink-faint/70 focus:outline-none focus-visible:outline-none sm:text-[1.875rem]"
               style={{ fontVariationSettings: "'opsz' 48" }}
@@ -446,10 +532,17 @@ function Editor({
                 />
               </div>
             )}
-            {kind === 'note' && !focusMode && (
-              <NotePanel key={ed.id ?? 'new'} meta={noteMeta} onChange={changeNote} />
+            {/* A belief leads with where you stand; its kind, topic and sources come after. */}
+            {isBelief && (
+              <BeliefStand perspectives={noteMeta.perspectives} onChange={changeStand} />
             )}
-            <div className="mt-6">
+            {kind === 'note' && !focusMode && (
+              <div className={isBelief ? 'mt-8' : undefined}>
+                <NotePanel key={ed.id ?? 'new'} meta={noteMeta} onChange={changeNote} />
+              </div>
+            )}
+            {isBelief && <h2 className="section-label mt-12">Notes</h2>}
+            <div className={isBelief ? 'mt-3' : 'mt-6'}>
               <MarkdownEditor
                 ref={editorRef}
                 value={ed.fields.body}
@@ -458,11 +551,13 @@ function Editor({
                 ariaLabel={kind === 'journal' ? 'Journal entry' : kind === 'note' ? 'Note' : 'Text'}
                 minRows={kind === 'note' ? 3 : 8}
                 placeholder={
-                  kind === 'journal'
-                    ? 'Write about your day, or anything at all…'
-                    : kind === 'note'
-                      ? 'Write it out: an explanation, an argument, a question, a passage…'
-                      : 'Start writing…'
+                  isBelief
+                    ? 'Anything else: background, arguments, what you have read… (optional)'
+                    : kind === 'journal'
+                      ? 'Write about your day, or anything at all…'
+                      : kind === 'note'
+                        ? 'Write it out: an explanation, an argument, a question, a passage…'
+                        : 'Start writing…'
                 }
               />
             </div>
@@ -484,9 +579,13 @@ function Editor({
                 {ed.fields.tags.map((t) => `#${t}`).join('  ')}
               </p>
             )}
+            {isBelief && (
+              <BeliefStand readOnly perspectives={noteMeta.perspectives} onChange={changeStand} />
+            )}
+            {isBelief && ed.fields.body.trim() && <h2 className="section-label mt-12">Notes</h2>}
             <Suspense fallback={<Loading />}>
               <MarkdownView
-                source={ed.fields.body || '_Nothing written yet._'}
+                source={isBelief ? ed.fields.body : ed.fields.body || '_Nothing written yet._'}
                 font={font}
                 className="mt-6"
               />
@@ -494,16 +593,6 @@ function Editor({
           </>
         )}
 
-        {kind === 'note' && noteMeta.noteType === 'belief' && !focusMode && (
-          <PerspectivesPanel
-            perspectives={noteMeta.perspectives}
-            onChange={(perspectives) =>
-              ed.id
-                ? changeNote({ perspectives })
-                : toast({ message: 'Write a line first, so the note exists.', tone: 'error' })
-            }
-          />
-        )}
         {kind === 'note' && noteMeta.noteType === 'decision' && !focusMode && (
           <DecisionPanel
             decision={noteMeta.decision}
@@ -514,7 +603,19 @@ function Editor({
             }
           />
         )}
-        {!focusMode && ed.id && <LinksPanel item={{ type: kind, id: ed.id }} className="mt-14" />}
+        {!focusMode && ed.id && (
+          <LinksPanel
+            item={{ type: kind, id: ed.id }}
+            passages={anchorsIn(ed.fields.body)}
+            className="mt-14"
+          />
+        )}
+        <FilePicker
+          open={!!filePick}
+          onClose={() => setFilePick(null)}
+          onPick={linkWords}
+          words={filePick?.words ?? ''}
+        />
       </article>
 
       {ed.id && (
@@ -527,6 +628,17 @@ function Editor({
             current={{ title: ed.fields.title, body: ed.fields.body, tags: ed.fields.tags }}
             onRestore={(v) => ed.setFields(v)}
           />
+          {live && (
+            <EntryMetadata
+              open={metaOpen}
+              onClose={() => setMetaOpen(false)}
+              kind={kind}
+              entry={live}
+              title={ed.fields.title}
+              body={ed.fields.body}
+              tags={ed.fields.tags}
+            />
+          )}
           <MomentDialog
             open={momentOpen}
             onClose={() => setMomentOpen(false)}

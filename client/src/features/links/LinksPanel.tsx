@@ -12,7 +12,16 @@ import { LinkPicker } from './LinkPicker';
  * "Linked" section shown under journal entries, writing, notes, books, projects and files.
  * Links are optional and work both ways: linking A to B also lists A on B.
  */
-export function LinksPanel({ item: self, className }: { item: Ref | null; className?: string }) {
+export function LinksPanel({
+  item: self,
+  passages = [],
+  className,
+}: {
+  item: Ref | null;
+  /** Words in this item's text linked to one of these items, shown under it. */
+  passages?: { ref: Ref; text: string }[];
+  className?: string;
+}) {
   const links = useLinks(self);
   const { remove } = useLinkMutations();
   const toast = useToast();
@@ -20,6 +29,11 @@ export function LinksPanel({ item: self, className }: { item: Ref | null; classN
 
   if (!self) return null;
   const items = links.data ?? [];
+  const wordsFor = (ref: Ref) =>
+    passages
+      .filter((p) => p.ref.type === ref.type && p.ref.id === ref.id && p.text)
+      .map((p) => `“${p.text}”`)
+      .join(', ');
 
   return (
     <section aria-labelledby="linked-heading" className={className}>
@@ -55,6 +69,11 @@ export function LinksPanel({ item: self, className }: { item: Ref | null; classN
                 <span className="block truncate text-sm text-ink">{l.title || 'Untitled'}</span>
                 {l.subtitle && (
                   <span className="block truncate text-2xs text-ink-faint">{l.subtitle}</span>
+                )}
+                {wordsFor(l.ref) && (
+                  <span className="block truncate text-[0.8125rem] italic text-ink-muted">
+                    {wordsFor(l.ref)}
+                  </span>
                 )}
               </span>
               {l.direction === 'in' && (

@@ -104,6 +104,14 @@ documentRoutes.post(
   }),
 );
 
+/** Stored bytes and files per folder (through every level), and for the whole library. */
+documentRoutes.get(
+  '/folders/sizes',
+  asyncHandler(async (req, res) => {
+    res.json({ sizes: await folderService.folderSizes(ctxOf(req)) });
+  }),
+);
+
 /** Counts what's inside some folders, so the client can say what a delete would remove. */
 documentRoutes.post(
   '/folders/usage',
@@ -206,6 +214,8 @@ documentRoutes.delete(
  * The file itself, streamed from private storage. Only safe types are shown inline; everything
  * else (HTML, SVG, scripts…) is always a download so it can't run on this origin. Byte ranges
  * are honoured so audio and video can seek (iOS won't play video without them).
+ * A stored file never changes (an upload always gets a new id), so the browser may keep it for
+ * good instead of fetching it again; signing out clears that cache.
  */
 for (const which of ['file', 'thumb'] as const) {
   documentRoutes.get(
@@ -222,7 +232,7 @@ for (const which of ['file', 'thumb'] as const) {
       res.set({
         'Content-Type': f.mime,
         'Content-Disposition': `${download ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(f.name)}`,
-        'Cache-Control': 'private, max-age=3600',
+        'Cache-Control': 'private, max-age=31536000, immutable',
         'X-Content-Type-Options': 'nosniff',
         'Accept-Ranges': 'bytes',
         ...(f.mime === 'text/plain' && { 'Content-Security-Policy': 'sandbox' }),
