@@ -284,17 +284,6 @@ function Editor({
   const [metaOpen, setMetaOpen] = useState(false);
   // Linking words to a file: the selection is remembered while the picker is open.
   const [filePick, setFilePick] = useState<{ range: TextRange; words: string } | null>(null);
-  // When a save adds or removes linked words, the server links or unlinks those files: refresh.
-  const anchorSig = anchorsIn(ed.fields.body)
-    .map((a) => `${a.ref.type}:${a.ref.id}`)
-    .sort()
-    .join(' ');
-  const savedAnchors = useRef(anchorSig);
-  useEffect(() => {
-    if (ed.status !== 'saved' || anchorSig === savedAnchors.current) return;
-    savedAnchors.current = anchorSig;
-    void qc.invalidateQueries({ queryKey: ['links'] });
-  }, [ed.status, anchorSig, qc]);
   const [momentOpen, setMomentOpen] = useState(false);
   const [showFormat, setShowFormat] = useState(
     () => readJSON<boolean>('editor:formatbar') ?? false,
