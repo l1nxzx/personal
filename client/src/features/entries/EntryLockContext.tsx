@@ -38,9 +38,15 @@ export type EntryLockStatus = 'loading' | 'no-vault' | 'needs-pin' | 'locked' | 
 
 interface EntryLockValue {
   status: EntryLockStatus;
-  /** Opens the PIN dialog if needed; resolves true once unlocked, false if cancelled. */
-  requestUnlock: () => Promise<boolean>;
+  /**
+   * Opens the PIN dialog if needed; resolves true once unlocked, false if cancelled.
+   * `confirm`: ask for the PIN even if already unlocked (removing encryption, for instance).
+   */
+  requestUnlock: (opts?: { confirm?: boolean }) => Promise<boolean>;
+  /** Hides every locked entry at once; open editors still save, encrypted, in the background. */
   lock: () => void;
+  /** Locked by hand ("Lock now"): screens don't pop up the PIN dialog by themselves. */
+  lockedByHand: boolean;
   seal: (content: SealedEntryContent) => Promise<SealedBox>;
   open: (box: SealedBox) => Promise<SealedEntryContent>;
   /** An open locked editor registers its save here, so locking saves its text first. */
@@ -69,6 +75,9 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
   });
 
   const keyRef = useRef<CryptoKey | null>(null);
+  /** The key while open editors finish saving after a lock; it can only encrypt, not open. */
+  const closingKeyRef = useRef<CryptoKey | null>(null);
+  const [lockedByHand, setLockedByHand] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
   const [pinSet, setPinSet] = useState<boolean | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -91,24 +100,30 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
     return () => void flushers.current.delete(flush);
   }, []);
 
-  // Open locked editors save (encrypted) before the key goes; at most a few seconds' wait.
-  const lock = useCallback(() => {
+  // The text disappears at once. Open editors still save what was typed, encrypted, with a key
+  // that is kept only for that (at most a few seconds) and can't open anything.
+  const lockWith = useCallback((byHand: boolean) => {
+    const key = keyRef.current;
+    keyRef.current = null;
+    setUnlocked(false);
+    setLockedByHand(byHand);
+    if (!key) return;
+    closingKeyRef.current = key;
     const pending = [...flushers.current].map((f) => f().catch(() => {}));
-    const clear = () => {
-      keyRef.current = null;
-      setUnlocked(false);
-    };
-    if (!pending.length) return clear();
-    void Promise.race([Promise.all(pending), new Promise((r) => setTimeout(r, 5000))]).then(clear);
+    void Promise.race([Promise.all(pending), new Promise((r) => setTimeout(r, 5000))]).then(() => {
+      if (closingKeyRef.current === key) closingKeyRef.current = null;
+    });
   }, []);
+  const lock = useCallback(() => lockWith(true), [lockWith]);
+  const autoLock = useCallback(() => lockWith(false), [lockWith]);
 
   // Signing out locks, and forgets this device's PIN for the account that signed out.
   const lastUser = useRef<string | null>(null);
   useEffect(() => {
     if (lastUser.current && lastUser.current !== userId) void forgetPin(lastUser.current);
     lastUser.current = userId;
-    lock();
-  }, [userId, lock]);
+    autoLock();
+  }, [userId, autoLock]);
 
   // Auto-lock: idle, or long in the background.
   const lastActive = useRef(Date.now());
@@ -118,10 +133,10 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
     let hiddenAt = 0;
     const onVis = () => {
       if (document.visibilityState === 'hidden') hiddenAt = Date.now();
-      else if (hiddenAt && Date.now() - hiddenAt > HIDDEN_LOCK_MS) lock();
+      else if (hiddenAt && Date.now() - hiddenAt > HIDDEN_LOCK_MS) autoLock();
     };
     const t = setInterval(() => {
-      if (Date.now() - lastActive.current > IDLE_LOCK_MS) lock();
+      if (Date.now() - lastActive.current > IDLE_LOCK_MS) autoLock();
     }, 30_000);
     touch();
     window.addEventListener('pointerdown', touch, { passive: true });
@@ -133,7 +148,7 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('keydown', touch);
       document.removeEventListener('visibilitychange', onVis);
     };
-  }, [unlocked, lock]);
+  }, [unlocked, autoLock]);
 
   const status: EntryLockStatus = !userId
     ? 'loading'
@@ -156,8 +171,8 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
     list.forEach((w) => w(ok));
   }, []);
 
-  const requestUnlock = useCallback(() => {
-    if (keyRef.current) return Promise.resolve(true);
+  const requestUnlock = useCallback((opts?: { confirm?: boolean }) => {
+    if (keyRef.current && !opts?.confirm) return Promise.resolve(true);
     setDialogOpen(true);
     return new Promise<boolean>((resolve) => waiters.current.push(resolve));
   }, []);
@@ -166,6 +181,7 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
     (key: CryptoKey) => {
       keyRef.current = key;
       lastActive.current = Date.now();
+      setLockedByHand(false);
       setUnlocked(true);
       setPinSet(true);
       finish(true);
@@ -178,9 +194,11 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
       status,
       requestUnlock,
       lock,
+      lockedByHand,
       async seal(content) {
-        if (!keyRef.current) throw new LockedError();
-        return encryptJSON(keyRef.current, content);
+        const key = keyRef.current ?? closingKeyRef.current;
+        if (!key) throw new LockedError();
+        return encryptJSON(key, content);
       },
       async open(box) {
         if (!keyRef.current) throw new LockedError();
@@ -188,7 +206,7 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
       },
       registerFlush,
     }),
-    [status, requestUnlock, lock, registerFlush],
+    [status, requestUnlock, lock, lockedByHand, registerFlush],
   );
 
   return (
@@ -203,7 +221,11 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
           try {
             accept(await unlockWithPin(userId, vaultMeta, pin));
           } catch (err) {
-            if (err instanceof WrongPinError && err.attemptsLeft <= 0) setPinSet(false);
+            if (err instanceof WrongPinError && err.attemptsLeft <= 0) {
+              // Too many wrong PINs, even while open: close everything, the passphrase is next.
+              setPinSet(false);
+              autoLock();
+            }
             throw err;
           }
         }}

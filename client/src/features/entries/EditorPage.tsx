@@ -8,6 +8,7 @@ import {
   History,
   Info,
   Lock,
+  LockOpen,
   Paperclip,
   Maximize2,
   Milestone,
@@ -125,8 +126,9 @@ function LockedGate({
   const lock = useEntryLock();
   const asked = useRef(false);
   useEffect(() => {
-    // Ask straight away once; after that, the button.
-    if (asked.current || lock.status === 'loading' || error) return;
+    // Ask straight away once; after that, the button. Not after "Lock now": the point was to
+    // hide it, and a PIN prompt popping up would only invite someone else to try.
+    if (asked.current || lock.status === 'loading' || error || lock.lockedByHand) return;
     asked.current = true;
     void lock.requestUnlock();
   }, [lock, error]);
@@ -400,23 +402,23 @@ function Editor({
       removeKey(`draft:${kind}:new`);
       setLocked(true);
       setTimeout(() => void flushRef.current(), 0);
-      toast({ message: 'Locked. It will be saved encrypted.' });
+      toast({ message: 'Encrypted. It will only ever be saved encrypted.' });
       return;
     }
     const ok = await confirm({
-      title: 'Lock this entry?',
+      title: 'Encrypt this entry?',
       message:
         'Its text, tags and every earlier version are encrypted on this device, and the readable copies are deleted from the server. The title stays readable. Opening it will need your PIN.',
-      confirmLabel: 'Lock',
+      confirmLabel: 'Encrypt',
     });
     if (!ok) return void flushRef.current();
     setLockBusy(true);
     try {
       const { id, rev } = await ed.settle();
       const done = await lockExisting(lock, kind, id!, rev, ed.fields);
-      afterLockChange(done, 'Locked');
+      afterLockChange(done, 'Encrypted');
     } catch (err) {
-      toast({ message: `Not locked: ${errorMessage(err)}`, tone: 'error' });
+      toast({ message: `Not encrypted: ${errorMessage(err)}`, tone: 'error' });
       void flushRef.current();
     } finally {
       setLockBusy(false);
@@ -425,7 +427,8 @@ function Editor({
 
   /** Remove the lock: the text and its history become readable on the server again. */
   const unlockEntry = async () => {
-    if (!(await lock.requestUnlock())) return;
+    // Always the PIN again, even while open: someone holding an open phone can't remove it.
+    if (!(await lock.requestUnlock({ confirm: true }))) return;
     const before = await ed.settle();
     if (!before.id) {
       setLocked(false);
@@ -433,19 +436,19 @@ function Editor({
       return;
     }
     const ok = await confirm({
-      title: 'Remove the lock?',
+      title: 'Remove encryption?',
       message:
         'The text, tags and earlier versions are stored readable on the server again, and show up in search and lists. The PIN is no longer needed to open it.',
-      confirmLabel: 'Remove the lock',
+      confirmLabel: 'Remove encryption',
     });
     if (!ok) return void flushRef.current();
     setLockBusy(true);
     try {
       const { id, rev } = await ed.settle();
       const done = await unlockExisting(lock, kind, id!, rev, ed.fields);
-      afterLockChange(done, 'Lock removed');
+      afterLockChange(done, 'Encryption removed');
     } catch (err) {
-      toast({ message: `Lock not removed: ${errorMessage(err)}`, tone: 'error' });
+      toast({ message: `Encryption not removed: ${errorMessage(err)}`, tone: 'error' });
       void flushRef.current();
     } finally {
       setLockBusy(false);
@@ -672,17 +675,17 @@ function Editor({
             aria-live="polite"
             title={ed.savedAt ? new Date(ed.savedAt).toLocaleString() : undefined}
           >
-            {lockBusy ? (locked ? 'Removing the lock…' : 'Locking…') : status.text}
+            {lockBusy ? (locked ? 'Removing encryption…' : 'Encrypting…') : status.text}
             <span className="hidden text-ink-faint sm:inline">
               {words > 0 && ` · ${words.toLocaleString()} ${words === 1 ? 'word' : 'words'}`}
             </span>
           </p>
-          {lockable && !focusMode && (
+          {/* Encrypted: lock it now (hides it at once; the PIN opens it again). Not yet: encrypt. */}
+          {lockable && (locked || !focusMode) && (
             <IconButton
-              label={locked ? 'Locked with your PIN. Remove the lock' : 'Lock with PIN'}
-              active={locked}
+              label={locked ? 'Lock now' : 'Encrypt with PIN'}
               disabled={lockBusy}
-              onClick={() => void (locked ? unlockEntry() : lockEntry())}
+              onClick={() => (locked ? lock.lock() : void lockEntry())}
               className={cn(locked && 'text-accent')}
             >
               <Lock className="h-4 w-4" />
@@ -752,6 +755,15 @@ function Editor({
                         label: live.archived ? 'Unarchive' : 'Archive',
                         icon: live.archived ? <ArchiveRestore /> : <Archive />,
                         onSelect: () => setFlag({ archived: !live.archived }),
+                      },
+                    ]
+                  : []),
+                ...(locked
+                  ? [
+                      {
+                        label: 'Remove encryption…',
+                        icon: <LockOpen />,
+                        onSelect: () => void unlockEntry(),
                       },
                     ]
                   : []),
