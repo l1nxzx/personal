@@ -116,6 +116,8 @@ export interface SealedEntryContent {
   body: string;
   tags: string[];
   wordCount: number;
+  /** Versions only: the label given with "Keep this version". */
+  label?: string | null;
 }
 
 export interface Entry {
@@ -200,7 +202,7 @@ export interface UnlockEntryRequest {
   rev: number;
   body: string;
   tags: string[];
-  versions: { id: string; body: string; tags: string[] }[];
+  versions: { id: string; body: string; tags: string[]; label: string | null }[];
 }
 
 /** details of a 409 EDIT_CONFLICT error */

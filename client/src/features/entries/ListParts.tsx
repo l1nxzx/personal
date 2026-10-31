@@ -1,9 +1,10 @@
-import { Lock, Plus, Search, X } from 'lucide-react';
+import { Lock, LockOpen, Plus, Search, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { EntryKind, TagCount } from '../../../../shared/types';
 import { PageHeader } from '../../components/shell/PageHeader';
 import { useQuickAction } from '../../context/UIContext';
+import { useEntryLock } from './EntryLockContext';
 import { cn } from '../../lib/cn';
 import { TabLinks } from '../../components/ui/misc';
 import { Skeleton, SkeletonText, skeletonWidth } from '../../components/ui/Skeleton';
@@ -196,3 +197,30 @@ export function EntryRowsSkeleton({
 }
 
 export const entryHref = (kind: EntryKind, id: string) => `/${kind}/${id}`;
+
+/**
+ * An encrypted entry's state on this device: a closed lock while it is locked, an open lock
+ * (in amber) while the PIN has opened it and anyone holding the device could read it.
+ */
+export function useEncryptedState() {
+  return useEntryLock().status === 'unlocked' ? 'open' : 'locked';
+}
+
+export function EncryptedMark({ className }: { className?: string }) {
+  const state = useEncryptedState();
+  const Icon = state === 'open' ? LockOpen : Lock;
+  return (
+    <Icon
+      className={cn(
+        'h-3.5 w-3.5 shrink-0',
+        state === 'open' ? 'text-warn' : 'text-accent',
+        className,
+      )}
+      strokeWidth={2}
+      aria-label={state === 'open' ? 'Encrypted, open on this device' : 'Encrypted, locked'}
+    />
+  );
+}
+
+export const encryptedLabel = (state: 'open' | 'locked') =>
+  state === 'open' ? 'Encrypted · open on this device' : 'Encrypted · locked';

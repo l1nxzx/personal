@@ -26,7 +26,7 @@ export async function openEntry(lock: Lock, entry: Entry): Promise<Entry> {
 export async function openVersion(lock: Lock, v: EntryVersion): Promise<EntryVersion> {
   if (!v.sealed) return v;
   const c = await lock.open(v.sealed);
-  return { ...v, body: c.body, tags: c.tags, wordCount: c.wordCount };
+  return { ...v, body: c.body, tags: c.tags, wordCount: c.wordCount, label: c.label ?? v.label };
 }
 
 export async function sealFields(lock: Lock, f: Fields) {
@@ -71,7 +71,13 @@ export async function lockExisting(
     versions: await Promise.all(
       versions.map(async (v) => ({
         id: v.id,
-        sealed: await lock.seal({ body: v.body, tags: v.tags, wordCount: v.wordCount }),
+        // The label and word count go inside too; the server keeps neither readable.
+        sealed: await lock.seal({
+          body: v.body,
+          tags: v.tags,
+          wordCount: v.wordCount,
+          label: v.label,
+        }),
       })),
     ),
   };
@@ -96,7 +102,7 @@ export async function unlockExisting(
     versions: await Promise.all(
       versions.map(async (v) => {
         const open = await openVersion(lock, v);
-        return { id: v.id, body: open.body, tags: open.tags };
+        return { id: v.id, body: open.body, tags: open.tags, label: open.label };
       }),
     ),
   };

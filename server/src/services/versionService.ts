@@ -1,7 +1,12 @@
-import type { EntryKind, EntryVersion, EntryVersionSummary } from '../../../shared/types.js';
+import type {
+  EntryKind,
+  EntryVersion,
+  EntryVersionSummary,
+  SealedBox,
+} from '../../../shared/types.js';
 import * as entries from '../data/entryRepo.js';
 import * as versions from '../data/versionRepo.js';
-import { notFound } from '../lib/errors.js';
+import { badRequest, notFound } from '../lib/errors.js';
 import type { Ctx } from './context.js';
 
 const toSummary = (v: versions.VersionRecord): EntryVersionSummary => ({
@@ -40,11 +45,16 @@ export async function saveVersion(
   kind: EntryKind,
   entryId: string,
   label: string | null,
+  sealed?: SealedBox,
 ): Promise<EntryVersionSummary> {
   const entry = await entries.get(ctx.userId, kind, entryId);
   if (!entry) throw notFound('This entry no longer exists');
   const clean = label?.trim() || null;
-  const id = await versions.add(ctx.userId, kind, entry, clean);
+  // A locked entry's version carries its text and label only encrypted (sent by the browser).
+  if (entry.locked && (clean || !sealed))
+    throw badRequest('This entry is locked: its versions are saved encrypted, label included');
+  if (!entry.locked && sealed) throw badRequest('This entry is not locked');
+  const id = await versions.add(ctx.userId, kind, entry, clean, sealed);
   return {
     id,
     entryId,

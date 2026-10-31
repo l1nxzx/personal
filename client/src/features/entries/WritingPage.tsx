@@ -1,4 +1,4 @@
-import { Archive, ArchiveRestore, Ellipsis, Lock, Pin, PinOff, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, Ellipsis, Pin, PinOff, Trash2 } from 'lucide-react';
 import { useDeferredValue } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { EntrySummary } from '../../../../shared/types';
@@ -12,7 +12,15 @@ import { errorMessage } from '../../lib/apiFetch';
 import { formatAgo } from '../../lib/dates';
 import { useSearch } from '../me/api';
 import { useDeleteEntry, useSetEntryFlags, useTags, useWritingList } from './api';
-import { EntryRowsSkeleton, FilterSearch, JournalSectionHeader, TagFilter } from './ListParts';
+import {
+  EncryptedMark,
+  encryptedLabel,
+  EntryRowsSkeleton,
+  FilterSearch,
+  JournalSectionHeader,
+  TagFilter,
+  useEncryptedState,
+} from './ListParts';
 
 /** Drafts, essays and other writing that isn't tied to a day. Pinned first, then recently edited. */
 export default function WritingPage() {
@@ -110,6 +118,7 @@ function WritingRow({ e }: { e: EntrySummary }) {
   const del = useDeleteEntry('writing');
   const confirm = useConfirm();
   const toast = useToast();
+  const encrypted = useEncryptedState();
 
   const setFlag = (patch: { pinned?: boolean; archived?: boolean }, message: string) =>
     flags.mutate(
@@ -128,13 +137,7 @@ function WritingRow({ e }: { e: EntrySummary }) {
       >
         <div className="flex items-center gap-2">
           {e.pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-accent" aria-label="Pinned" />}
-          {e.locked && (
-            <Lock
-              className="h-3.5 w-3.5 shrink-0 text-accent"
-              strokeWidth={2}
-              aria-label="Locked"
-            />
-          )}
+          {e.locked && <EncryptedMark />}
           <h3
             className={
               e.title
@@ -152,7 +155,7 @@ function WritingRow({ e }: { e: EntrySummary }) {
         <p className="mt-1.5 text-2xs text-ink-faint">
           Edited {formatAgo(e.updatedAt)}
           {e.locked ? (
-            ' · Locked'
+            ` · ${encryptedLabel(encrypted)}`
           ) : (
             <>
               {' · '}

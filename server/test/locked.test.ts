@@ -103,6 +103,12 @@ describe('locked entries', () => {
     const text = storedText();
     expect(text).not.toContain('secret');
     expect(text).not.toContain('hidden-tag');
+    // Version labels and word counts are inside the sealed box too.
+    expect(text).not.toContain('kept');
+    for (const v of versions) {
+      const stored = (await agent.get(`/api/versions/${v.id}`).expect(200)).body.version;
+      expect(stored).toMatchObject({ label: null, wordCount: 0 });
+    }
     const v = await agent.get(`/api/versions/${versions[0].id}`).expect(200);
     expect(v.body.version).toMatchObject({ body: '', tags: [], sealed: box(versions[0].id) });
 
@@ -146,7 +152,7 @@ describe('locked entries', () => {
         rev: 2,
         body: 'now open',
         tags: ['t'],
-        versions: [{ id: versions[0].id, body: 'older', tags: [] }],
+        versions: [{ id: versions[0].id, body: 'older text', tags: [], label: 'kept' }],
       })
       .expect(200);
     expect(res.body.entry).toMatchObject({
@@ -156,7 +162,7 @@ describe('locked entries', () => {
       tags: ['t'],
     });
     const v = (await agent.get(`/api/versions/${versions[0].id}`).expect(200)).body.version;
-    expect(v).toMatchObject({ body: 'older', sealed: null });
+    expect(v).toMatchObject({ body: 'older text', sealed: null, label: 'kept', wordCount: 2 });
   });
 
   it('Quick Capture to a day whose entry is locked starts a new entry', async () => {
@@ -177,6 +183,50 @@ describe('locked entries', () => {
     expect(list).toHaveLength(2);
     const added = list.find((x: { id: string }) => x.id !== locked.id);
     expect(added).toMatchObject({ locked: false, excerpt: 'a thought' });
+  });
+
+  it('keeps versions of a locked entry only encrypted, label included', async () => {
+    const { agent } = await signedUpAgent();
+    const e = (
+      await agent
+        .post('/api/writing')
+        .send({ sealed: box('a') })
+        .expect(201)
+    ).body.entry;
+    await agent.post(`/api/writing/${e.id}/versions`).send({ label: 'readable' }).expect(400);
+    await agent.post(`/api/writing/${e.id}/versions`).send({ label: null }).expect(400);
+    const v = (
+      await agent
+        .post(`/api/writing/${e.id}/versions`)
+        .send({ sealed: box('v') })
+        .expect(201)
+    ).body.version;
+    const got = (await agent.get(`/api/versions/${v.id}`).expect(200)).body.version;
+    expect(got).toMatchObject({ label: null, sealed: box('v'), body: '' });
+    const open = (await agent.post('/api/writing').send({ body: 'x' }).expect(201)).body.entry;
+    await agent
+      .post(`/api/writing/${open.id}/versions`)
+      .send({ sealed: box('v') })
+      .expect(400);
+  });
+
+  it('records no usage actions for encrypted entries', async () => {
+    const { agent } = await signedUpAgent();
+    const today = new Date().toISOString().slice(0, 10);
+    const e = (
+      await agent
+        .post('/api/journal')
+        .send({ date: today, sealed: box('a') })
+        .expect(201)
+    ).body.entry;
+    await agent
+      .patch(`/api/journal/${e.id}`)
+      .send({ rev: 1, sealed: box('b') })
+      .expect(200);
+    const usage = (await agent.get('/api/me/usage').query({ from: today, to: today }).expect(200))
+      .body.usage;
+    const actions = usage.days[0]?.actions ?? [];
+    expect(actions.filter((a: { action: string }) => a.action.startsWith('journal'))).toEqual([]);
   });
 
   it('requires authentication for lock and unlock', async () => {

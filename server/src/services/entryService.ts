@@ -236,7 +236,8 @@ export async function createEntry(
   notifyChange(ctx, kind, id);
   const linkText = linkTextOf(record);
   if (anchorKeys(linkText).size) await syncTextLinks(ctx, { type: kind, id }, linkText);
-  await recordAction(ctx, `${kind}.created`, id);
+  // Encrypted entries leave no trace in usage statistics (like the vault).
+  if (!locked) await recordAction(ctx, `${kind}.created`, id);
   return toEntry(kind, record);
 }
 
@@ -274,7 +275,7 @@ export async function updateEntry(
         )
       : await updateEntryWith(ctx, kind, id, input.rev ?? null, () => input, content);
   // Pinning and archiving are not editing.
-  if (content || details) await recordAction(ctx, `${kind}.edited`, id);
+  if ((content || details) && !meta.locked) await recordAction(ctx, `${kind}.edited`, id);
   return meta;
 }
 
@@ -546,7 +547,15 @@ export async function lockEntry(
     throw new AppError(409, 'VERSIONS_CHANGED', 'The version history changed; try again');
   await versions.rewrite(
     ctx.userId,
-    readable.map((s) => ({ id: s.id, body: '', tags: [], sealed: sent.get(s.id)! })),
+    // The label and word count go too: they are inside the sealed box.
+    readable.map((s) => ({
+      id: s.id,
+      body: '',
+      tags: [],
+      sealed: sent.get(s.id)!,
+      wordCount: 0,
+      label: null,
+    })),
   );
 
   const result = await entries.update(ctx.userId, kind, id, input.rev, (c) => {
@@ -616,7 +625,14 @@ export async function unlockEntry(
     ctx.userId,
     sealed.map((s) => {
       const v = sent.get(s.id)!;
-      return { id: s.id, body: v.body, tags: normalizeTags(v.tags), sealed: null };
+      return {
+        id: s.id,
+        body: v.body,
+        tags: normalizeTags(v.tags),
+        sealed: null,
+        wordCount: wordCount(v.body),
+        label: v.label?.trim() || null,
+      };
     }),
   );
   notifyChange(ctx, kind, id);

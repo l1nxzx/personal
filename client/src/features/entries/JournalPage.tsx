@@ -1,4 +1,3 @@
-import { Lock } from 'lucide-react';
 import { useDeferredValue } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { EntrySummary, SearchResult } from '../../../../shared/types';
@@ -16,7 +15,15 @@ import {
 } from '../../lib/dates';
 import { useSearch } from '../me/api';
 import { useJournalList, useTags } from './api';
-import { FilterSearch, GroupHeading, JournalSectionHeader, TagFilter } from './ListParts';
+import {
+  EncryptedMark,
+  encryptedLabel,
+  FilterSearch,
+  GroupHeading,
+  JournalSectionHeader,
+  TagFilter,
+  useEncryptedState,
+} from './ListParts';
 import { cn } from '../../lib/cn';
 
 /** The last ten years of months, newest first, for the month filter. */
@@ -176,6 +183,7 @@ function MonthGroups({ entries, filtered }: { entries: EntrySummary[]; filtered:
 
 function JournalRow({ e }: { e: EntrySummary }) {
   const isToday = e.date === today();
+  const encrypted = useEncryptedState();
   return (
     <Link
       to={`/journal/${e.id}`}
@@ -208,10 +216,10 @@ function JournalRow({ e }: { e: EntrySummary }) {
               )}
               style={{ fontVariationSettings: "'opsz' 20" }}
             >
-              <Lock className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={2} aria-hidden />
-              <span className="truncate">{e.title || 'Locked entry'}</span>
+              <EncryptedMark />
+              <span className="truncate">{e.title || 'Encrypted entry'}</span>
             </h3>
-            <p className="mt-1.5 text-2xs text-ink-faint">Locked</p>
+            <p className="mt-1.5 text-2xs text-ink-faint">{encryptedLabel(encrypted)}</p>
           </>
         ) : e.title ? (
           <>

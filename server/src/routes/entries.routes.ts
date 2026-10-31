@@ -102,7 +102,12 @@ const unlockBody = z
     tags: tagList,
     versions: z
       .array(
-        z.object({ id: z.string().min(1).max(64), body: z.string().max(MAX_BODY), tags: tagList }),
+        z.object({
+          id: z.string().min(1).max(64),
+          body: z.string().max(MAX_BODY),
+          tags: tagList,
+          label: z.string().max(120).nullable(),
+        }),
       )
       .max(1000),
   })
@@ -212,7 +217,11 @@ function entryRoutes(kind: EntryKind) {
     '/:id/versions',
     validate({
       params: idParams,
-      body: z.object({ label: z.string().max(120).nullable().optional() }),
+      body: z.object({
+        label: z.string().max(120).nullable().optional(),
+        /** Locked entries: the text and label, encrypted in the browser (no readable label). */
+        sealed: sealedBox.optional(),
+      }),
     }),
     asyncHandler(async (req, res) => {
       res.status(201).json({
@@ -221,6 +230,7 @@ function entryRoutes(kind: EntryKind) {
           kind,
           req.params.id!,
           req.body.label ?? null,
+          req.body.sealed,
         ),
       });
     }),
