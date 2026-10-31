@@ -8,6 +8,8 @@ import type {
 import * as users from '../data/userRepo.js';
 import * as storage from '../data/storage.js';
 import * as vault from '../data/vaultRepo.js';
+import { deleteEntry } from './entryService.js';
+import * as entries from '../data/entryRepo.js';
 import { AppError, conflict, notFound, unauthorized } from '../lib/errors.js';
 import { verifyPassword } from '../lib/password.js';
 import { notifyChange, type Ctx } from './context.js';
@@ -58,6 +60,10 @@ export async function changePassphrase(
 /** Deletes everything in the vault for good (for a forgotten passphrase). */
 export async function resetVault(ctx: Ctx, password: string): Promise<void> {
   await requirePassword(ctx, password);
+  // Locked journal entries and writings are encrypted with this vault key: without it they
+  // can never be read again, so they go with the vault (the reset form says so).
+  for (const { kind, id } of await entries.lockedIds(ctx.userId))
+    await deleteEntry(ctx, kind, id).catch(() => {});
   const ids = await vault.removeAll(ctx.userId);
   await Promise.all(ids.map((id) => storage.deleteFile(fileKey(ctx.userId, id))));
   notifyChange(ctx, 'vault');

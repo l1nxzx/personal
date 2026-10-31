@@ -11,6 +11,12 @@ import * as versionService from '../services/versionService.js';
 import { idParams, localDate, tagList } from './schemas.js';
 
 const MAX_BODY = 200_000;
+/** Base64 AES-GCM of a body up to MAX_BODY (JSON with tags), with room to spare. */
+const sealedBox = z.object({
+  iv: z.string().min(16).max(32),
+  data: z.string().min(1).max(1_200_000),
+});
+const anchors = z.array(z.string().regex(/^(document|folder):[A-Za-z0-9_-]{1,64}$/)).max(500);
 
 const noteType = z.enum(['note', 'question', 'belief', 'quote', 'decision']);
 const decision = z
@@ -56,6 +62,9 @@ const createBody = z.object({
   sources: sources.optional(),
   /** Beliefs: where you stand can be written before anything else. */
   perspectives: perspectives.optional(),
+  /** Created locked: the text arrives encrypted, never readable. */
+  sealed: sealedBox.optional(),
+  anchors: anchors.optional(),
 });
 
 const updateBody = z
@@ -72,6 +81,30 @@ const updateBody = z
     sources: sources.optional(),
     perspectives: perspectives.optional(),
     decision: decision.optional(),
+    sealed: sealedBox.optional(),
+    anchors: anchors.optional(),
+  })
+  .strict();
+
+const lockBody = z
+  .object({
+    rev: z.number().int().positive(),
+    sealed: sealedBox,
+    anchors,
+    versions: z.array(z.object({ id: z.string().min(1).max(64), sealed: sealedBox })).max(1000),
+  })
+  .strict();
+
+const unlockBody = z
+  .object({
+    rev: z.number().int().positive(),
+    body: z.string().max(MAX_BODY),
+    tags: tagList,
+    versions: z
+      .array(
+        z.object({ id: z.string().min(1).max(64), body: z.string().max(MAX_BODY), tags: tagList }),
+      )
+      .max(1000),
   })
   .strict();
 
@@ -202,6 +235,28 @@ function entryRoutes(kind: EntryKind) {
       });
     }),
   );
+
+  if (kind !== 'note') {
+    /** Lock with the PIN: the text and all versions arrive encrypted, replacing readable ones. */
+    router.post(
+      '/:id/lock',
+      validate({ params: idParams, body: lockBody }),
+      asyncHandler(async (req, res) => {
+        res.json({
+          entry: await entryService.lockEntry(ctxOf(req), kind, req.params.id!, req.body),
+        });
+      }),
+    );
+    router.post(
+      '/:id/unlock',
+      validate({ params: idParams, body: unlockBody }),
+      asyncHandler(async (req, res) => {
+        res.json({
+          entry: await entryService.unlockEntry(ctxOf(req), kind, req.params.id!, req.body),
+        });
+      }),
+    );
+  }
 
   router.delete(
     '/:id',

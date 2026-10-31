@@ -251,7 +251,7 @@ function ResetVault() {
           const ok = await confirm({
             title: 'Delete everything in the vault?',
             message:
-              'Every entry, document, account note and instruction in it is deleted for good.',
+              'Every entry, document, account note and instruction in it is deleted for good, and so is every locked journal entry and writing (they are encrypted with the vault’s key and could never be opened again).',
             confirmLabel: 'Delete the vault',
             danger: true,
           });

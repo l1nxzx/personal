@@ -159,6 +159,7 @@ const versionOf = (kind: EntryKind, r: EntryRecord, label: string | null) => ({
   wordCount: r.wordCount,
   savedAt: r.updatedAt,
   label,
+  sealed: r.sealed ?? null,
 });
 const summary = ({
   body: _b,
@@ -167,6 +168,8 @@ const summary = ({
   perspectives: _p,
   decision: _d,
   lastSnapshotAt: _l,
+  sealed: _se,
+  anchors: _a,
   ...rest
 }: EntryRecord): EntrySummaryRecord => rest;
 
@@ -284,6 +287,11 @@ export const entryRepo = {
       .sort(byDesc((r) => r.updatedAt))
       .map((r) => ({ ...summary(clone(r)), perspectives: clone(r.perspectives) }));
   },
+  async lockedIds(uid: string) {
+    return (['journal', 'writing'] as const).flatMap((kind) =>
+      [...entries(uid, kind).values()].filter((r) => r.locked).map((r) => ({ kind, id: r.id })),
+    );
+  },
 };
 
 /** Test helper: make an entry look as if its last snapshot was long ago. */
@@ -309,6 +317,22 @@ export const versionRepo = {
   async removeAllFor(_uid: string, entryId: string) {
     for (const [id, v] of stores.versions) if (v.entryId === entryId) stores.versions.delete(id);
   },
+  async sealStates(_uid: string, entryId: string) {
+    return [...stores.versions.values()]
+      .filter((v) => v.entryId === entryId)
+      .map((v) => ({ id: v.id, sealed: !!v.sealed }));
+  },
+  async rewrite(
+    _uid: string,
+    patches: { id: string; body: string; tags: string[]; sealed: VersionRecord['sealed'] }[],
+  ) {
+    for (const p of patches) {
+      const v = stores.versions.get(p.id);
+      if (v) stores.versions.set(p.id, { ...v, body: p.body, tags: p.tags, sealed: p.sealed });
+    }
+  },
+  /** Test helper: every stored version of an entry, as stored. */
+  all: (entryId: string) => [...stores.versions.values()].filter((v) => v.entryId === entryId),
 };
 
 // ---------------------------------------------------------------- links

@@ -7,6 +7,7 @@ import {
   Code,
   History,
   Info,
+  Lock,
   Paperclip,
   Maximize2,
   Milestone,
@@ -36,7 +37,7 @@ import { formatAgo, formatLongDate, today } from '../../lib/dates';
 import { isMod, useKeydown } from '../../lib/hotkeys';
 import { keys } from '../../lib/keys';
 import { ENTRY_LIST } from '../../lib/routes';
-import { readJSON, writeJSON } from '../../lib/storage';
+import { readJSON, removeKey, writeJSON } from '../../lib/storage';
 import { anchorsIn, anchorUrl, type AnchorRef } from '../../lib/anchors';
 import { FilePicker } from '../documents/FilePicker';
 import { LinksPanel } from '../links/LinksPanel';
@@ -54,7 +55,9 @@ import {
 import { MomentDialog } from '../timeline/MomentDialog';
 import { BeliefStand, DecisionPanel, NotePanel } from './NoteDetails';
 import { TagInput } from './TagInput';
-import { useEntryEditor, type SaveStatus } from './useEntryEditor';
+import { useEntryEditor, type EntryCipher, type SaveStatus } from './useEntryEditor';
+import { useEntryLock } from './EntryLockContext';
+import { lockExisting, openEntry, sealFields, unlockExisting } from './locking';
 import { VersionHistory } from './VersionHistory';
 import { EntryMetadata } from './EntryMetadata';
 
@@ -75,42 +78,127 @@ export interface NewEntrySeed {
   date?: string;
   noteType?: NoteType;
   topic?: string;
+  /** Start it locked: its text is encrypted before it is ever sent (journal and writing). */
+  locked?: boolean;
 }
 
 export function EditorPage({ kind }: { kind: EntryKind }) {
   const { id = 'new' } = useParams();
   const location = useLocation();
+  const lock = useEntryLock();
   if (id === 'new') {
-    return (
-      <Editor
-        key={location.key}
-        kind={kind}
-        entry={null}
-        seed={(location.state as NewEntrySeed | null) ?? undefined}
-      />
-    );
+    const seed = (location.state as NewEntrySeed | null) ?? undefined;
+    // A new locked entry needs the key before the first word is typed.
+    if (seed?.locked && kind !== 'note' && lock.status !== 'unlocked')
+      return <LockedGate kind={kind} title={null} />;
+    return <Editor key={location.key} kind={kind} entry={null} seed={seed} />;
   }
   return <ExistingEntry key={id} kind={kind} id={id} />;
 }
 
+/** Top bar with the way back, as on the editor. */
+function GateTopBar({ kind }: { kind: EntryKind }) {
+  return (
+    <div className="pt-safe">
+      <div className="mx-auto flex h-14 max-w-[52rem] items-center px-2 sm:px-4">
+        <Link
+          to={LIST_PATH[kind]}
+          className="flex h-10 items-center gap-1 rounded pl-1 pr-2 text-sm text-ink-muted hover:bg-surface-2 active:bg-surface-2/60 hover:text-ink sm:h-8"
+        >
+          <ChevronLeft className="h-5 w-5 sm:h-4 sm:w-4" /> {SECTION_LABEL[kind]}
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+/** What a locked entry shows until the PIN is entered: its title (if any), and a way in. */
+function LockedGate({
+  kind,
+  title,
+  error,
+}: {
+  kind: EntryKind;
+  title: string | null;
+  error?: string;
+}) {
+  const lock = useEntryLock();
+  const asked = useRef(false);
+  useEffect(() => {
+    // Ask straight away once; after that, the button.
+    if (asked.current || lock.status === 'loading' || error) return;
+    asked.current = true;
+    void lock.requestUnlock();
+  }, [lock, error]);
+  return (
+    <div>
+      <GateTopBar kind={kind} />
+      <div className="mx-auto w-full max-w-[42rem] px-5 pt-16 text-center sm:px-8 sm:pt-24">
+        <Lock className="mx-auto h-6 w-6 text-accent" strokeWidth={1.75} aria-hidden />
+        <h1
+          className="mt-4 font-serif text-[1.375rem] font-medium leading-snug text-ink"
+          style={{ fontVariationSettings: "'opsz' 32" }}
+        >
+          {title === null ? 'New locked entry' : title || 'Locked entry'}
+        </h1>
+        <p className="mx-auto mt-2 max-w-sm text-sm text-ink-muted">
+          {error ??
+            (title === null
+              ? 'Its text is encrypted on this device before it is saved. Enter your PIN to start.'
+              : 'Its text is encrypted. Enter your PIN to read and write it.')}
+        </p>
+        {!error && (
+          <Button variant="primary" className="mt-6" onClick={() => void lock.requestUnlock()}>
+            <Lock className="h-4 w-4" /> Unlock
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** A locked entry, decrypted once the key is open (the readable copy lives in memory only). */
+function LockedEntry({ kind, entry }: { kind: EntryKind; entry: Entry }) {
+  const lock = useEntryLock();
+  const [opened, setOpened] = useState<{ from: Entry; entry: Entry } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const unlocked = lock.status === 'unlocked';
+  useEffect(() => {
+    if (!unlocked) return setOpened(null);
+    let live = true;
+    openEntry(lock, entry)
+      .then((e) => live && setOpened({ from: entry, entry: e }))
+      .catch(
+        () =>
+          live &&
+          setError(
+            "This entry can't be opened with this vault's key. It was locked with another one.",
+          ),
+      );
+    return () => {
+      live = false;
+    };
+  }, [entry, unlocked, lock]);
+  if (!unlocked || error)
+    return <LockedGate kind={kind} title={entry.title} error={error ?? undefined} />;
+  if (!opened) return <EditorSkeleton kind={kind} />;
+  return <Editor key="locked" kind={kind} entry={opened.entry} />;
+}
+
 function ExistingEntry({ kind, id }: { kind: EntryKind; id: string }) {
   const query = useEntry(kind, id);
-  if (query.data) return <Editor kind={kind} entry={query.data} />;
+  if (query.data?.locked) return <LockedEntry kind={kind} entry={query.data} />;
+  if (query.data) return <Editor key="open" kind={kind} entry={query.data} />;
+  return <EditorSkeleton kind={kind} query={query} />;
+}
+
+function EditorSkeleton({ kind, query }: { kind: EntryKind; query?: ReturnType<typeof useEntry> }) {
   // Laid out like the editor (top bar, then the writing column), so it opens without a jump.
   return (
     <div>
-      <div className="pt-safe">
-        <div className="mx-auto flex h-14 max-w-[52rem] items-center px-2 sm:px-4">
-          <Link
-            to={LIST_PATH[kind]}
-            className="flex h-10 items-center gap-1 rounded pl-1 pr-2 text-sm text-ink-muted hover:bg-surface-2 active:bg-surface-2/60 hover:text-ink sm:h-8"
-          >
-            <ChevronLeft className="h-5 w-5 sm:h-4 sm:w-4" /> {SECTION_LABEL[kind]}
-          </Link>
-        </div>
-      </div>
+      <GateTopBar kind={kind} />
       <div className="mx-auto w-full max-w-[42rem] px-5 pt-4 sm:px-8 sm:pt-10">
-        {query.isError ? (
+        {query?.isError ? (
           query.error instanceof ApiError && query.error.status === 404 ? (
             <p className="py-8 text-ink-muted">This entry doesn&apos;t exist any more.</p>
           ) : (
@@ -267,7 +355,19 @@ function Editor({
   const pendingNoteRef = useRef(pendingNote);
   pendingNoteRef.current = pendingNote;
 
+  // Locked: the text is encrypted here before every save (an entry can be locked before it is
+  // first saved, so the server never sees it, or later, which replaces every readable copy).
+  const lock = useEntryLock();
+  const lockable = kind !== 'note';
+  const [locked, setLocked] = useState(() => entry?.locked ?? (lockable && !!seed?.locked));
+  const cipher = useMemo<EntryCipher | null>(
+    () => (locked ? { seal: (f) => sealFields(lock, f), open: (e) => openEntry(lock, e) } : null),
+    [locked, lock],
+  );
+  const [lockBusy, setLockBusy] = useState(false);
+
   const ed = useEntryEditor(kind, entry, {
+    cipher,
     newFields,
     createExtra: () => (kind === 'note' ? pendingNoteRef.current : {}),
     // Swap /journal/new for the real URL without remounting (keeps focus and caret).
@@ -281,6 +381,87 @@ function Editor({
     if (entry) ed.applyRemote(entry);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entry]);
+
+  // Locking (after inactivity, say) saves this text first, encrypted.
+  const { registerFlush } = lock;
+  const flushRef = useRef(ed.flush);
+  flushRef.current = ed.flush;
+  useEffect(
+    () => (locked ? registerFlush(() => flushRef.current()) : undefined),
+    [locked, registerFlush],
+  );
+
+  /** Lock with the PIN. Not yet saved: nothing to replace. Saved: every readable copy goes. */
+  const lockEntry = async () => {
+    if (!(await lock.requestUnlock())) return;
+    const before = await ed.settle();
+    if (!before.id) {
+      // Never saved: from now on it is only ever sent encrypted.
+      removeKey(`draft:${kind}:new`);
+      setLocked(true);
+      setTimeout(() => void flushRef.current(), 0);
+      toast({ message: 'Locked. It will be saved encrypted.' });
+      return;
+    }
+    const ok = await confirm({
+      title: 'Lock this entry?',
+      message:
+        'Its text, tags and every earlier version are encrypted on this device, and the readable copies are deleted from the server. The title stays readable. Opening it will need your PIN.',
+      confirmLabel: 'Lock',
+    });
+    if (!ok) return void flushRef.current();
+    setLockBusy(true);
+    try {
+      const { id, rev } = await ed.settle();
+      const done = await lockExisting(lock, kind, id!, rev, ed.fields);
+      afterLockChange(done, 'Locked');
+    } catch (err) {
+      toast({ message: `Not locked: ${errorMessage(err)}`, tone: 'error' });
+      void flushRef.current();
+    } finally {
+      setLockBusy(false);
+    }
+  };
+
+  /** Remove the lock: the text and its history become readable on the server again. */
+  const unlockEntry = async () => {
+    if (!(await lock.requestUnlock())) return;
+    const before = await ed.settle();
+    if (!before.id) {
+      setLocked(false);
+      setTimeout(() => void flushRef.current(), 0);
+      return;
+    }
+    const ok = await confirm({
+      title: 'Remove the lock?',
+      message:
+        'The text, tags and earlier versions are stored readable on the server again, and show up in search and lists. The PIN is no longer needed to open it.',
+      confirmLabel: 'Remove the lock',
+    });
+    if (!ok) return void flushRef.current();
+    setLockBusy(true);
+    try {
+      const { id, rev } = await ed.settle();
+      const done = await unlockExisting(lock, kind, id!, rev, ed.fields);
+      afterLockChange(done, 'Lock removed');
+    } catch (err) {
+      toast({ message: `Lock not removed: ${errorMessage(err)}`, tone: 'error' });
+      void flushRef.current();
+    } finally {
+      setLockBusy(false);
+    }
+  };
+
+  /** The server has the entry in its new form: reopen it that way (a fresh editor). */
+  const afterLockChange = (done: Entry, message: string) => {
+    ed.forget(); // what's on screen is saved; nothing to write locally or send again
+    qc.setQueryData(keys.entry(kind, done.id), done);
+    void qc.invalidateQueries({ queryKey: ['entries', kind] });
+    void qc.invalidateQueries({ queryKey: ['versions', kind, done.id] });
+    qc.removeQueries({ queryKey: ['version'] });
+    toast({ message });
+    navigate(`${LIST_PATH[kind]}/${done.id}`, { replace: true });
+  };
 
   const [mode, setMode] = useState<'write' | 'read'>('write');
   const [focusMode, setFocusMode] = useState(false);
@@ -491,11 +672,22 @@ function Editor({
             aria-live="polite"
             title={ed.savedAt ? new Date(ed.savedAt).toLocaleString() : undefined}
           >
-            {status.text}
+            {lockBusy ? (locked ? 'Removing the lock…' : 'Locking…') : status.text}
             <span className="hidden text-ink-faint sm:inline">
               {words > 0 && ` · ${words.toLocaleString()} ${words === 1 ? 'word' : 'words'}`}
             </span>
           </p>
+          {lockable && !focusMode && (
+            <IconButton
+              label={locked ? 'Locked with your PIN. Remove the lock' : 'Lock with PIN'}
+              active={locked}
+              disabled={lockBusy}
+              onClick={() => void (locked ? unlockEntry() : lockEntry())}
+              className={cn(locked && 'text-accent')}
+            >
+              <Lock className="h-4 w-4" />
+            </IconButton>
+          )}
           {mode === 'write' && !focusMode && (
             <IconButton
               label={showFormat ? 'Hide formatting' : 'Formatting'}

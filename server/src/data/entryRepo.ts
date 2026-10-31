@@ -4,6 +4,7 @@ import type {
   EntryKind,
   NoteType,
   Perspective,
+  SealedBox,
   Source,
 } from '../../../shared/types.js';
 import { db } from '../config/firebase.js';
@@ -45,11 +46,23 @@ export interface EntryRecord extends Partial<TextStats> {
   monthDay: string | null;
   /** When the last version snapshot was taken. */
   lastSnapshotAt: string | null;
+  /** Locked with the PIN: `body` and `tags` are empty and the text is in `sealed`. */
+  locked: boolean;
+  sealed: SealedBox | null;
+  /** Locked entries: link keys of the files its text links to (the server can't read it). */
+  anchors: string[];
 }
 
 export type EntrySummaryRecord = Omit<
   EntryRecord,
-  'body' | 'searchTerms' | 'sources' | 'perspectives' | 'decision' | 'lastSnapshotAt'
+  | 'body'
+  | 'searchTerms'
+  | 'sources'
+  | 'perspectives'
+  | 'decision'
+  | 'lastSnapshotAt'
+  | 'sealed'
+  | 'anchors'
 >;
 
 const SUMMARY_FIELDS = [
@@ -71,6 +84,7 @@ const SUMMARY_FIELDS = [
   'revisitOn',
   'decided',
   'monthDay',
+  'locked',
 ] as const;
 
 const COLLECTION: Record<EntryKind, string> = {
@@ -95,6 +109,7 @@ export function versionOf(kind: EntryKind, r: EntryRecord, label: string | null)
     wordCount: r.wordCount,
     savedAt: r.updatedAt,
     label,
+    sealed: r.sealed ?? null,
   };
 }
 const topicsDoc = (uid: string) => userDoc(uid).collection('meta').doc('topics');
@@ -120,6 +135,7 @@ function toSummary(id: string, d: FirebaseFirestore.DocumentData): EntrySummaryR
     revisitOn: d.revisitOn ?? null,
     decided: d.decided ?? false,
     monthDay: d.monthDay ?? null,
+    locked: d.locked ?? false,
   };
 }
 
@@ -132,6 +148,8 @@ function toRecord(id: string, d: FirebaseFirestore.DocumentData): EntryRecord {
     perspectives: d.perspectives ?? [],
     decision: d.decision ?? null,
     lastSnapshotAt: d.lastSnapshotAt ?? null,
+    sealed: d.sealed ?? null,
+    anchors: d.anchors ?? [],
   };
 }
 
@@ -353,4 +371,14 @@ export async function listUpdatedBetween(
     ...toSummary(d.id, d.data()),
     perspectives: (d.get('perspectives') ?? []) as Perspective[],
   }));
+}
+
+/** Locked journal entries and writings (they depend on the vault key). */
+export async function lockedIds(uid: string): Promise<{ kind: EntryKind; id: string }[]> {
+  const out: { kind: EntryKind; id: string }[] = [];
+  for (const kind of ['journal', 'writing'] as const) {
+    const snap = await col(uid, kind).where('locked', '==', true).select().limit(5000).get();
+    out.push(...snap.docs.map((d) => ({ kind, id: d.id })));
+  }
+  return out;
 }

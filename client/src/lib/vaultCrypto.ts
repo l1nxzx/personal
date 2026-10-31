@@ -13,7 +13,7 @@ import type { VaultMetaInput } from '../../../shared/types';
  */
 
 export const ITERATIONS = 600_000;
-type Bytes = Uint8Array<ArrayBuffer>;
+export type Bytes = Uint8Array<ArrayBuffer>;
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
@@ -31,9 +31,13 @@ export function fromBase64(b64: string): Bytes {
   return out;
 }
 
-const random = (n: number): Bytes => crypto.getRandomValues(new Uint8Array(n));
+export const random = (n: number): Bytes => crypto.getRandomValues(new Uint8Array(n));
 
-async function deriveKek(passphrase: string, salt: Bytes, iterations: number): Promise<CryptoKey> {
+export async function deriveKek(
+  passphrase: string,
+  salt: Bytes,
+  iterations: number,
+): Promise<CryptoKey> {
   const material = await crypto.subtle.importKey(
     'raw',
     enc.encode(passphrase.normalize('NFKC')),
@@ -50,7 +54,7 @@ async function deriveKek(passphrase: string, salt: Bytes, iterations: number): P
   );
 }
 
-const importVaultKey = (raw: Bytes) =>
+export const importVaultKey = (raw: Bytes) =>
   crypto.subtle.importKey('raw', raw, { name: 'AES-GCM', length: 256 }, false, [
     'encrypt',
     'decrypt',
@@ -78,7 +82,8 @@ export class WrongPassphraseError extends Error {
   }
 }
 
-async function unwrapRaw(passphrase: string, meta: VaultMetaInput): Promise<Bytes> {
+/** The raw vault key (callers must wipe it with `fill(0)` once done). */
+export async function unwrapRaw(passphrase: string, meta: VaultMetaInput): Promise<Bytes> {
   const kek = await deriveKek(passphrase, fromBase64(meta.salt), meta.iterations);
   try {
     return new Uint8Array(

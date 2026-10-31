@@ -1,4 +1,4 @@
-import { Archive, ArchiveRestore, Ellipsis, Pin, PinOff, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, Ellipsis, Lock, Pin, PinOff, Trash2 } from 'lucide-react';
 import { useDeferredValue } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { EntrySummary } from '../../../../shared/types';
@@ -128,6 +128,13 @@ function WritingRow({ e }: { e: EntrySummary }) {
       >
         <div className="flex items-center gap-2">
           {e.pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-accent" aria-label="Pinned" />}
+          {e.locked && (
+            <Lock
+              className="h-3.5 w-3.5 shrink-0 text-accent"
+              strokeWidth={2}
+              aria-label="Locked"
+            />
+          )}
           <h3
             className={
               e.title
@@ -143,9 +150,16 @@ function WritingRow({ e }: { e: EntrySummary }) {
           <p className="mt-0.5 line-clamp-2 text-sm leading-6 text-ink-muted">{e.excerpt}</p>
         )}
         <p className="mt-1.5 text-2xs text-ink-faint">
-          Edited {formatAgo(e.updatedAt)} · {e.wordCount.toLocaleString()}{' '}
-          {e.wordCount === 1 ? 'word' : 'words'}
-          {e.tags.length > 0 && <span> · {e.tags.map((t) => `#${t}`).join(' ')}</span>}
+          Edited {formatAgo(e.updatedAt)}
+          {e.locked ? (
+            ' · Locked'
+          ) : (
+            <>
+              {' · '}
+              {e.wordCount.toLocaleString()} {e.wordCount === 1 ? 'word' : 'words'}
+              {e.tags.length > 0 && <span> · {e.tags.map((t) => `#${t}`).join(' ')}</span>}
+            </>
+          )}
         </p>
       </Link>
       <div className="pt-3 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:focus-within:opacity-100 [@media(hover:hover)]:group-hover:opacity-100">
