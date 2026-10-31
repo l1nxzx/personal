@@ -13,18 +13,23 @@ import { useRealtime } from '../../hooks/useRealtime';
 import { isMod, isTyping, useKeydown } from '../../lib/hotkeys';
 import { sectionOf } from '../../lib/sections';
 import { MobileNav } from './MobileNav';
+import { PullToRefresh } from './PullToRefresh';
 import { Sidebar } from './Sidebar';
 
 /**
  * Navigation around the page area. Also shown on its own while the session is being checked,
  * so opening the site shows its structure at once instead of a blank screen.
  */
-export function ShellFrame({ children }: { children?: ReactNode }) {
-  // Editors take the whole phone screen; no bottom bar competing with the keyboard.
+function useInEditor(): boolean {
   const journalEditor = useMatch('/journal/:id');
   const writingEditor = useMatch('/writing/:id');
   const noteEditor = useMatch('/ideas/:id');
-  const inEditor = !!(journalEditor || writingEditor || noteEditor);
+  return !!(journalEditor || writingEditor || noteEditor);
+}
+
+export function ShellFrame({ children }: { children?: ReactNode }) {
+  // Editors take the whole phone screen; no bottom bar competing with the keyboard.
+  const inEditor = useInEditor();
 
   return (
     <div className="min-h-dvh">
@@ -62,11 +67,17 @@ export function AppShell({ preload }: { preload?: () => void }) {
   const { user } = useAuth();
 
   // Fetch the other pages' code while idle, so moving between sections doesn't wait for it.
+  // Safari has no requestIdleCallback; a short delay stands in for it there.
   useEffect(() => {
     if (!preload) return;
+    if ('requestIdleCallback' in window) {
+      const id = window.requestIdleCallback(preload, { timeout: 4000 });
+      return () => window.cancelIdleCallback(id);
+    }
     const t = setTimeout(preload, 1500);
     return () => clearTimeout(t);
   }, [preload]);
+  const inEditor = useInEditor();
 
   useRealtime(true);
   // Time is recorded for the section on screen (`lib/sections.ts`).
@@ -98,6 +109,8 @@ export function AppShell({ preload }: { preload?: () => void }) {
           <Outlet />
         </Suspense>
       </ShellFrame>
+      {/* Editors own every gesture on their screen; they never pull to refresh. */}
+      <PullToRefresh disabled={inEditor} />
       <CaptureDialog />
       <SearchDialog />
       <TaskDetailHost />

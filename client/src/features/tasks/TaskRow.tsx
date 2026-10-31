@@ -159,7 +159,7 @@ export function TaskRow({
 
   return (
     <div
-      className="group -mx-2 flex cursor-pointer items-start gap-3 rounded px-2 py-2.5 transition-colors hover:bg-surface/70"
+      className="group -mx-2 flex cursor-pointer items-start gap-3 rounded px-2 py-2.5 transition-colors hover:bg-surface/70 active:bg-surface"
       onClick={open}
     >
       <Checkbox

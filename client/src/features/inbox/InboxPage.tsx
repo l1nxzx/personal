@@ -130,7 +130,7 @@ function InboxItem({ c }: { c: Capture }) {
             type="button"
             onClick={() => fileTo(a.to)}
             disabled={convert.isPending}
-            className="hidden h-8 items-center gap-1.5 rounded px-2 text-[0.8125rem] text-ink-muted hover:bg-surface-2 hover:text-ink sm:inline-flex [&>svg]:h-3.5 [&>svg]:w-3.5"
+            className="hidden h-8 items-center gap-1.5 rounded px-2 text-[0.8125rem] text-ink-muted hover:bg-surface-2 active:bg-surface-2/60 hover:text-ink sm:inline-flex [&>svg]:h-3.5 [&>svg]:w-3.5"
           >
             {a.icon}
             {a.label}

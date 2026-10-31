@@ -16,7 +16,7 @@ function Tab({ item, pathname }: { item: NavItem; pathname: string }) {
       to={item.to}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'flex flex-1 flex-col items-center justify-center gap-0.5 text-[0.6875rem]',
+        'flex flex-1 flex-col items-center justify-center gap-0.5 text-[0.6875rem] transition-colors active:bg-surface-2/60',
         active ? 'text-ink' : 'text-ink-faint',
       )}
     >
@@ -43,7 +43,7 @@ export function MobileNav() {
     <>
       <nav
         aria-label="Sections"
-        className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface lg:hidden"
+        className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg lg:hidden"
       >
         <div className="flex h-14 items-stretch">
           <Tab item={home!} pathname={pathname} />
@@ -53,7 +53,7 @@ export function MobileNav() {
               type="button"
               onClick={() => openCapture()}
               aria-label="Capture"
-              className="flex h-10 w-12 items-center justify-center rounded-md bg-accent-strong text-accent-ink active:bg-accent-strong/80"
+              className="flex h-10 w-12 items-center justify-center rounded-md bg-accent-strong text-accent-ink transition-colors active:bg-accent-strong/75"
             >
               <Plus className="h-5 w-5" strokeWidth={2.25} />
             </button>
@@ -64,7 +64,7 @@ export function MobileNav() {
             onClick={() => setMoreOpen(true)}
             aria-expanded={moreOpen}
             className={cn(
-              'flex flex-1 flex-col items-center justify-center gap-0.5 text-[0.6875rem]',
+              'flex flex-1 flex-col items-center justify-center gap-0.5 text-[0.6875rem] transition-colors active:bg-surface-2/60',
               moreActive ? 'text-ink' : 'text-ink-faint',
             )}
           >

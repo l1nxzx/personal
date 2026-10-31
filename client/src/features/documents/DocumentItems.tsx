@@ -187,7 +187,7 @@ function ListRow({ entry, h }: { entry: Entry; h: ItemHandlers }) {
       className={cn(
         LIST_COLS,
         'group/item min-h-[3.25rem] rounded-sm transition-colors',
-        selected ? 'bg-accent/10' : 'hover:bg-surface/70',
+        selected ? 'bg-accent/10' : 'hover:bg-surface/70 active:bg-surface',
         drop.over && 'bg-accent/15 ring-1 ring-inset ring-accent/60',
       )}
     >

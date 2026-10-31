@@ -59,14 +59,74 @@
 
 @layer base {
   html {
-    /* Keep the scrollbar's space reserved, so short and long pages lay out at the same width. */
-    scrollbar-gutter: stable;
     -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
+    /* No double-tap zoom delay; pinch zoom still works. */
+    touch-action: manipulation;
+  }
+  html,
+  body {
+    /* No browser overscroll glow or pull to refresh; the app has its own (PullToRefresh). */
+    overscroll-behavior: none;
   }
   body {
     @apply bg-bg font-sans text-[15px] leading-6 text-ink antialiased;
     font-feature-settings: 'kern', 'liga';
+  }
+  /* Inner scroll areas keep their scrolling to themselves instead of passing it to the page. */
+  .overflow-auto,
+  .overflow-y-auto,
+  .overflow-y-scroll {
+    overscroll-behavior-y: contain;
+  }
+
+  @media (pointer: fine) {
+    html {
+      /* Keep the scrollbar's space reserved, so short and long pages lay out at the same width. */
+      scrollbar-gutter: stable;
+    }
+  }
+
+  /*
+   * Touch screens: controls behave like an app's. Pressing and holding a button, link or tab
+   * doesn't select its label or open the link callout. Writing and reading text stays selectable.
+   * Scrollbars are hidden; scrolling is by touch.
+   */
+  @media (pointer: coarse) {
+    :where(
+      button,
+      a,
+      nav,
+      label,
+      summary,
+      [role='button'],
+      [role='link'],
+      [role='tab'],
+      [role='menuitem'],
+      [role='menuitemradio'],
+      [role='menuitemcheckbox'],
+      [role='option'],
+      [role='switch'],
+      [role='checkbox'],
+      [role='radio'],
+      [role='slider']
+    ) {
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+    :where(input, textarea, [contenteditable]:not([contenteditable='false']), .prose-entry),
+    :where([contenteditable]:not([contenteditable='false']), .prose-entry) * {
+      -webkit-user-select: text;
+      user-select: text;
+      -webkit-touch-callout: default;
+    }
+    * {
+      scrollbar-width: none;
+    }
+    ::-webkit-scrollbar {
+      display: none;
+    }
   }
   ::selection {
     background: rgb(var(--accent) / 0.3);
@@ -101,6 +161,51 @@
 }
 
 @layer components {
+  /*
+   * A 44px hit area on touch screens for small icon buttons, without changing how they look.
+   * (`absolute`/`fixed` utilities on the button still win over the `relative` here.)
+   */
+  @media (pointer: coarse) {
+    .touch-target {
+      position: relative;
+    }
+    .touch-target::before {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: max(100%, 44px);
+      height: max(100%, 44px);
+      transform: translate(-50%, -50%);
+    }
+  }
+
+  /* Pull to refresh: the arc turns into a spinner while refreshing. */
+  .ptr-spinning {
+    animation: ptr-rotate 1.4s linear infinite;
+  }
+  .ptr-spinning circle {
+    animation: ptr-dash 1.4s ease-in-out infinite;
+  }
+  @keyframes ptr-rotate {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes ptr-dash {
+    0% {
+      stroke-dasharray: 1 60;
+      stroke-dashoffset: 0;
+    }
+    50% {
+      stroke-dasharray: 36 60;
+      stroke-dashoffset: -8;
+    }
+    100% {
+      stroke-dasharray: 36 60;
+      stroke-dashoffset: -52;
+    }
+  }
   /* Section label with a hairline running to the edge: structure without boxes. */
   .section-label {
     @apply flex items-center gap-3 text-2xs font-medium uppercase tracking-[0.12em] text-ink-faint;

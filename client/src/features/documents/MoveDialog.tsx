@@ -105,7 +105,9 @@ function Picker({
                 title={off ? 'A folder can’t go inside itself' : undefined}
                 className={cn(
                   'flex h-11 w-full items-center gap-3 px-4 text-left text-sm sm:h-9',
-                  off ? 'cursor-not-allowed opacity-40' : 'hover:bg-surface-2',
+                  off
+                    ? 'cursor-not-allowed opacity-40'
+                    : 'hover:bg-surface-2 active:bg-surface-2/60',
                 )}
               >
                 <FolderGlyph className="h-4 w-4" />

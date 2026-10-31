@@ -38,7 +38,7 @@ export default function TimelinePage() {
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded border border-line-strong px-3 text-sm text-ink hover:bg-surface-2 sm:h-9"
+          className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded border border-line-strong px-3 text-sm text-ink hover:bg-surface-2 active:bg-surface-2/60 sm:h-9"
         >
           <Plus className="h-4 w-4" /> Add moment
         </button>

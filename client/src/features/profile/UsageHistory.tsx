@@ -302,7 +302,7 @@ function TimeColumns({ bars, caption }: { bars: Bar[]; caption: string }) {
           type="button"
           onClick={() => setAsTable((t) => !t)}
           aria-pressed={asTable}
-          className="ml-auto h-8 rounded px-2 hover:bg-surface-2 hover:text-ink sm:h-6"
+          className="ml-auto h-8 rounded px-2 hover:bg-surface-2 active:bg-surface-2/60 hover:text-ink sm:h-6"
         >
           {asTable ? 'Show chart' : 'Show as table'}
         </button>

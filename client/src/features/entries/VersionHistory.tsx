@@ -183,7 +183,7 @@ function Panel({
                     <button
                       type="button"
                       onClick={() => setSelected(v.id)}
-                      className="-mx-2 block w-[calc(100%+1rem)] rounded px-2 py-3 text-left hover:bg-surface/70"
+                      className="-mx-2 block w-[calc(100%+1rem)] rounded px-2 py-3 text-left hover:bg-surface/70 active:bg-surface"
                     >
                       <span className="block text-sm text-ink">{when(v.savedAt)}</span>
                       <span className="block truncate text-2xs text-ink-faint">

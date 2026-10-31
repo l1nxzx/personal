@@ -209,7 +209,7 @@ function Panel({
               href={fileUrl(id, { download: true })}
               aria-label="Download"
               title="Download"
-              className="inline-flex h-10 w-10 items-center justify-center rounded text-ink-muted hover:bg-surface-2 hover:text-ink sm:h-8 sm:w-8"
+              className="touch-target inline-flex h-10 w-10 items-center justify-center rounded text-ink-muted hover:bg-surface-2 active:bg-surface-2/60 hover:text-ink sm:h-8 sm:w-8"
             >
               <Download className="h-4 w-4" />
             </a>
@@ -302,7 +302,7 @@ function Preview({ doc }: { doc: DocumentFile }) {
       <p>This kind of file can&apos;t be previewed here.</p>
       <a
         href={fileUrl(doc.id, { download: true })}
-        className="inline-flex h-10 items-center gap-2 rounded border border-line-strong px-4 text-ink hover:bg-surface-2 sm:h-9"
+        className="inline-flex h-10 items-center gap-2 rounded border border-line-strong px-4 text-ink hover:bg-surface-2 active:bg-surface-2/60 sm:h-9"
       >
         <Download className="h-4 w-4" /> Download
       </a>
@@ -344,7 +344,7 @@ function Details({
             type="button"
             onClick={onShowFolder}
             title="Show in folder"
-            className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded border border-line px-3 text-left text-sm text-ink hover:bg-surface-2 sm:h-9"
+            className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded border border-line px-3 text-left text-sm text-ink hover:bg-surface-2 active:bg-surface-2/60 sm:h-9"
           >
             <FolderGlyph className="h-4 w-4" />
             <span className="truncate">{location}</span>

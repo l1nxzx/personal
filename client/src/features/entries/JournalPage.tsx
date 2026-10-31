@@ -173,7 +173,7 @@ function JournalRow({ e }: { e: EntrySummary }) {
   return (
     <Link
       to={`/journal/${e.id}`}
-      className="group -mx-2 grid grid-cols-[2.75rem_1fr] gap-3 rounded px-2 py-4 transition-colors hover:bg-surface/70 sm:grid-cols-[3.25rem_1fr] sm:gap-4"
+      className="group -mx-2 grid grid-cols-[2.75rem_1fr] gap-3 rounded px-2 py-4 transition-colors hover:bg-surface/70 active:bg-surface sm:grid-cols-[3.25rem_1fr] sm:gap-4"
     >
       <div className="pt-0.5 text-center">
         <div
@@ -231,7 +231,7 @@ function JournalSearch({ q }: { q: string }) {
         <li key={r.id}>
           <Link
             to={`/journal/${r.id}`}
-            className="-mx-2 block rounded px-2 py-3.5 hover:bg-surface/70"
+            className="-mx-2 block rounded px-2 py-3.5 hover:bg-surface/70 active:bg-surface"
           >
             <div className="flex items-baseline gap-3">
               <span className="min-w-0 flex-1 truncate font-serif text-[1.0625rem] text-ink">

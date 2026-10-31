@@ -19,7 +19,10 @@ import { NOTE_TYPES, noteTypeLabel } from './NoteDetails';
 export function NoteRow({ e, showTopic = true }: { e: EntrySummary; showTopic?: boolean }) {
   const n = e.note!;
   return (
-    <Link to={`/ideas/${e.id}`} className="-mx-2 block rounded px-2 py-3.5 hover:bg-surface/70">
+    <Link
+      to={`/ideas/${e.id}`}
+      className="-mx-2 block rounded px-2 py-3.5 hover:bg-surface/70 active:bg-surface"
+    >
       <div className="flex items-center gap-2">
         {e.pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-accent" aria-label="Pinned" />}
         <h3
@@ -287,7 +290,7 @@ function SearchResults({
         <li key={r.id}>
           <Link
             to={`/ideas/${r.id}`}
-            className="-mx-2 block rounded px-2 py-3.5 hover:bg-surface/70"
+            className="-mx-2 block rounded px-2 py-3.5 hover:bg-surface/70 active:bg-surface"
           >
             <span className="block truncate font-serif text-[1.0625rem] text-ink">
               {r.title || 'Untitled'}

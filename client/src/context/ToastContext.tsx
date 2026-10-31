@@ -55,7 +55,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                   t.action!.onClick();
                   dismiss(t.id);
                 }}
-                className="h-9 shrink-0 rounded px-2 font-medium text-accent hover:bg-surface-2 sm:h-7"
+                className="h-9 shrink-0 rounded px-2 font-medium text-accent hover:bg-surface-2 active:bg-surface-2/60 sm:h-7"
               >
                 {t.action.label}
               </button>
@@ -64,7 +64,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               type="button"
               aria-label="Dismiss"
               onClick={() => dismiss(t.id)}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded text-ink-faint hover:bg-surface-2 hover:text-ink sm:h-7 sm:w-7"
+              className="touch-target flex h-9 w-9 shrink-0 items-center justify-center rounded text-ink-faint hover:bg-surface-2 active:bg-surface-2/60 hover:text-ink sm:h-7 sm:w-7"
             >
               <X className="h-3.5 w-3.5" />
             </button>

@@ -124,7 +124,7 @@ function WritingRow({ e }: { e: EntrySummary }) {
     <div className="group flex items-start gap-2">
       <Link
         to={`/writing/${e.id}`}
-        className="-mx-2 min-w-0 flex-1 rounded px-2 py-4 hover:bg-surface/70"
+        className="-mx-2 min-w-0 flex-1 rounded px-2 py-4 hover:bg-surface/70 active:bg-surface"
       >
         <div className="flex items-center gap-2">
           {e.pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-accent" aria-label="Pinned" />}
@@ -209,7 +209,7 @@ function SearchList({
         <li key={r.id}>
           <Link
             to={`/writing/${r.id}`}
-            className="-mx-2 block rounded px-2 py-3.5 hover:bg-surface/70"
+            className="-mx-2 block rounded px-2 py-3.5 hover:bg-surface/70 active:bg-surface"
           >
             <div className="flex items-baseline gap-3">
               <span className="min-w-0 flex-1 truncate font-serif text-[1.0625rem] text-ink">

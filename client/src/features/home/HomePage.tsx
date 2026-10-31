@@ -230,7 +230,7 @@ function Reflection() {
           aria-label="Not today"
           title="Not today"
           onClick={() => update.mutate({ promptDismissedOn: t })}
-          className="-my-2 flex h-9 w-9 items-center justify-center rounded text-ink-faint hover:bg-surface-2 hover:text-ink sm:h-7 sm:w-7"
+          className="touch-target -my-2 flex h-9 w-9 items-center justify-center rounded text-ink-faint hover:bg-surface-2 active:bg-surface-2/60 hover:text-ink sm:h-7 sm:w-7"
         >
           <X className="h-3.5 w-3.5" />
         </button>
@@ -299,7 +299,10 @@ function Continue() {
 function RecentRow({ e }: { e: EntrySummary }) {
   const title = e.title || (e.kind === 'journal' && e.date ? formatLongDate(e.date) : 'Untitled');
   return (
-    <Link to={hrefFor(e.kind, e.id)} className="block rounded px-2 py-2.5 hover:bg-surface/70">
+    <Link
+      to={hrefFor(e.kind, e.id)}
+      className="block rounded px-2 py-2.5 hover:bg-surface/70 active:bg-surface"
+    >
       <span
         className="block truncate font-serif text-[1rem] font-medium text-ink"
         style={{ fontVariationSettings: "'opsz' 20" }}
@@ -341,7 +344,10 @@ function MoneyOverview() {
         </Link>
       </div>
       {any ? (
-        <Link to="/money" className="-mx-2 block rounded px-2 py-1.5 hover:bg-surface/70">
+        <Link
+          to="/money"
+          className="-mx-2 block rounded px-2 py-1.5 hover:bg-surface/70 active:bg-surface"
+        >
           <span className="block text-2xs text-ink-faint">{monthLabel(now, 'long')}</span>
           <span className="block text-xl tabular-nums text-ink">
             {formatMoney(month.received, cur)}
@@ -395,7 +401,7 @@ function ToRevisit() {
           <li key={d.id}>
             <Link
               to={hrefFor(d.kind, d.id)}
-              className="block rounded px-2 py-2 hover:bg-surface/70"
+              className="block rounded px-2 py-2 hover:bg-surface/70 active:bg-surface"
             >
               <span className="block truncate text-sm text-ink">
                 {d.title || 'Untitled decision'}
@@ -456,7 +462,7 @@ function OnThisDay() {
             <li key={`${i.ref.type}:${i.ref.id}`}>
               <Link
                 to={hrefFor(i.ref.type, i.ref.id)}
-                className="block rounded px-2 py-2.5 hover:bg-surface/70"
+                className="block rounded px-2 py-2.5 hover:bg-surface/70 active:bg-surface"
               >
                 <span className="block text-2xs text-ink-faint">
                   {ago === 1 ? 'A year ago' : `${ago} years ago`} · {TYPE_LABEL[i.ref.type]}
@@ -496,7 +502,7 @@ function RecentlyAdded() {
           <li key={`${a.ref.type}:${a.ref.id}`}>
             <Link
               to={hrefFor(a.ref.type, a.ref.id)}
-              className="flex items-baseline gap-3 rounded px-2 py-2 hover:bg-surface/70"
+              className="flex items-baseline gap-3 rounded px-2 py-2 hover:bg-surface/70 active:bg-surface"
             >
               <span className="w-12 shrink-0 text-2xs uppercase tracking-wider text-ink-faint">
                 {TYPE_LABEL[a.ref.type]}

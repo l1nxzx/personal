@@ -183,7 +183,7 @@ function BookRow({ b }: { b: BookSummary }) {
   return (
     <Link
       to={`/library/books/${b.id}`}
-      className="-mx-2 flex items-baseline gap-4 rounded px-2 py-3.5 hover:bg-surface/70"
+      className="-mx-2 flex items-baseline gap-4 rounded px-2 py-3.5 hover:bg-surface/70 active:bg-surface"
     >
       <div className="min-w-0 flex-1">
         <h3

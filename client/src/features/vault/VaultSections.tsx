@@ -9,6 +9,7 @@ import { useConfirm } from '../../context/ConfirmContext';
 import { useToast } from '../../context/ToastContext';
 import { useAutosize } from '../../hooks/useAutosize';
 import { ApiError, errorMessage } from '../../lib/apiFetch';
+import { useHoldWork } from '../../lib/busy';
 import { cn } from '../../lib/cn';
 import { formatAgo, formatLongDate, today } from '../../lib/dates';
 import { formatSize } from '../documents/api';
@@ -57,7 +58,7 @@ export function TextTab({ kind, initialId }: { kind: TextKind; initialId?: strin
                 <button
                   type="button"
                   onClick={() => setOpen(i.id)}
-                  className="-mx-2 block w-[calc(100%+1rem)] rounded px-2 py-3 text-left hover:bg-surface/70"
+                  className="-mx-2 block w-[calc(100%+1rem)] rounded px-2 py-3 text-left hover:bg-surface/70 active:bg-surface"
                 >
                   <span className="block truncate font-serif text-[1.0625rem] text-ink">
                     {c.title || 'Untitled'}
@@ -101,6 +102,7 @@ function TextEditor({
   const [status, setStatus] = useState<'saved' | 'editing' | 'saving' | 'error' | 'conflict'>(
     'saved',
   );
+  useHoldWork(status !== 'saved');
   const ref = useRef({ id: item?.id ?? null, updatedAt: item?.updatedAt });
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const latest = useRef({ title, body, date });
@@ -159,7 +161,7 @@ function TextEditor({
         <button
           type="button"
           onClick={() => void save().then(onBack)}
-          className="-ml-2 flex h-10 items-center gap-1 rounded pl-1 pr-2 text-sm text-ink-muted hover:bg-surface-2 hover:text-ink sm:h-8"
+          className="-ml-2 flex h-10 items-center gap-1 rounded pl-1 pr-2 text-sm text-ink-muted hover:bg-surface-2 active:bg-surface-2/60 hover:text-ink sm:h-8"
         >
           <ChevronLeft className="h-4 w-4" /> Back
         </button>
@@ -332,7 +334,7 @@ export function DocumentsTab() {
                 <button
                   type="button"
                   onClick={() => void open(d)}
-                  className="-mx-2 flex min-w-0 flex-1 items-center gap-3 rounded px-2 py-2.5 text-left hover:bg-surface/70"
+                  className="-mx-2 flex min-w-0 flex-1 items-center gap-3 rounded px-2 py-2.5 text-left hover:bg-surface/70 active:bg-surface"
                 >
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-surface-2 text-ink-faint">
                     <FileText className="h-4 w-4" strokeWidth={1.5} />
@@ -464,7 +466,7 @@ export function AccountsTab({ initialId }: { initialId?: string | null }) {
                 <button
                   type="button"
                   onClick={() => setEditing(a)}
-                  className="-mx-2 block w-[calc(100%+1rem)] rounded px-2 py-3 text-left hover:bg-surface/70"
+                  className="-mx-2 block w-[calc(100%+1rem)] rounded px-2 py-3 text-left hover:bg-surface/70 active:bg-surface"
                 >
                   <span className="block text-[0.9375rem] font-medium text-ink">
                     {c.service || 'Unnamed account'}
@@ -838,7 +840,7 @@ export function VaultSearch({ onOpen }: { onOpen: (item: DecryptedItem) => void 
               <button
                 type="button"
                 onClick={() => onOpen(i)}
-                className="-mx-2 flex w-[calc(100%+1rem)] items-baseline gap-3 rounded px-2 py-2.5 text-left hover:bg-surface/70"
+                className="-mx-2 flex w-[calc(100%+1rem)] items-baseline gap-3 rounded px-2 py-2.5 text-left hover:bg-surface/70 active:bg-surface"
               >
                 <span className="w-24 shrink-0 text-2xs uppercase tracking-wider text-ink-faint">
                   {KIND_LABEL[c.kind]}
