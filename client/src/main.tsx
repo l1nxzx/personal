@@ -8,6 +8,7 @@ import { ConfirmProvider } from './context/ConfirmContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
 import { UIProvider } from './context/UIContext';
+import { EntryLockProvider } from './features/entries/EntryLockContext';
 import { VaultProvider } from './features/vault/VaultContext';
 import { initAppUpdate } from './lib/appUpdate';
 import { queryClient } from './lib/queryClient';
@@ -25,9 +26,11 @@ createRoot(document.getElementById('root')!).render(
             <ConfirmProvider>
               <AuthProvider>
                 <VaultProvider>
-                  <UIProvider>
-                    <App />
-                  </UIProvider>
+                  <EntryLockProvider>
+                    <UIProvider>
+                      <App />
+                    </UIProvider>
+                  </EntryLockProvider>
                 </VaultProvider>
               </AuthProvider>
             </ConfirmProvider>

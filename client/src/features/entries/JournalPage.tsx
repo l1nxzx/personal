@@ -1,3 +1,4 @@
+import { Lock } from 'lucide-react';
 import { useDeferredValue } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { EntrySummary, SearchResult } from '../../../../shared/types';
@@ -16,6 +17,7 @@ import {
 import { useSearch } from '../me/api';
 import { useJournalList, useTags } from './api';
 import { FilterSearch, GroupHeading, JournalSectionHeader, TagFilter } from './ListParts';
+import { cn } from '../../lib/cn';
 
 /** The last ten years of months, newest first, for the month filter. */
 const MONTHS = (() => {
@@ -197,7 +199,21 @@ function JournalRow({ e }: { e: EntrySummary }) {
         </div>
       </div>
       <div className="min-w-0">
-        {e.title ? (
+        {e.locked ? (
+          <>
+            <h3
+              className={cn(
+                'flex items-center gap-1.5 font-serif text-[1.0625rem]',
+                e.title ? 'font-medium text-ink' : 'italic text-ink-muted',
+              )}
+              style={{ fontVariationSettings: "'opsz' 20" }}
+            >
+              <Lock className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={2} aria-hidden />
+              <span className="truncate">{e.title || 'Locked entry'}</span>
+            </h3>
+            <p className="mt-1.5 text-2xs text-ink-faint">Locked</p>
+          </>
+        ) : e.title ? (
           <>
             <h3
               className="truncate font-serif text-[1.0625rem] font-medium text-ink"
@@ -214,10 +230,12 @@ function JournalRow({ e }: { e: EntrySummary }) {
             {e.excerpt || <span className="italic text-ink-faint">Empty entry</span>}
           </p>
         )}
-        <p className="mt-1.5 text-2xs text-ink-faint">
-          {e.wordCount.toLocaleString()} {e.wordCount === 1 ? 'word' : 'words'}
-          {e.tags.length > 0 && <span> · {e.tags.map((t) => `#${t}`).join(' ')}</span>}
-        </p>
+        {!e.locked && (
+          <p className="mt-1.5 text-2xs text-ink-faint">
+            {e.wordCount.toLocaleString()} {e.wordCount === 1 ? 'word' : 'words'}
+            {e.tags.length > 0 && <span> · {e.tags.map((t) => `#${t}`).join(' ')}</span>}
+          </p>
+        )}
       </div>
     </Link>
   );

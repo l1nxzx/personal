@@ -5,12 +5,14 @@ import type {
   EntryKind,
   EntryMeta,
   EntrySummary,
+  LockEntryRequest,
   NoteType,
   Page,
   Perspective,
   Source,
   TagCount,
   TopicCount,
+  UnlockEntryRequest,
   UpdateEntryRequest,
 } from '../../../shared/types.js';
 import * as entries from '../data/entryRepo.js';
@@ -54,11 +56,42 @@ const latestDate = (ps: Perspective[]) =>
 
 /** Version history: keep the stored text before overwriting it, at most every 30 minutes. */
 const SNAPSHOT_EVERY_MS = 30 * 60 * 1000;
-const shouldSnapshot = (current: entries.EntryRecord, next: { title?: string; body?: string }) =>
-  current.body.trim().length > 0 &&
+const shouldSnapshot = (
+  current: entries.EntryRecord,
+  next: { title?: string; body?: string; sealed?: unknown },
+) =>
+  (current.locked ? !!current.sealed : current.body.trim().length > 0) &&
   ((next.body !== undefined && next.body !== current.body) ||
+    (next.sealed !== undefined && next.sealed !== current.sealed) ||
     (next.title !== undefined && next.title !== current.title)) &&
   Date.now() - Date.parse(current.lastSnapshotAt ?? current.createdAt) > SNAPSHOT_EVERY_MS;
+
+/** Only journal entries and writings can be locked. */
+function assertLockable(kind: EntryKind) {
+  if (kind === 'note') throw badRequest('Only journal entries and writings can be locked');
+}
+
+/**
+ * A locked entry's searchable and listed fields: the title only. Its text, tags and word count
+ * exist only inside `sealed`, so nothing derived from them is stored readable either.
+ */
+function lockedDerived(kind: EntryKind, title: string) {
+  return {
+    excerpt: '',
+    wordCount: 0,
+    ...textStatsOf(kind, { body: '', perspectives: [], decision: null }),
+    searchTerms: buildSearchTerms(title),
+  };
+}
+
+/** Link keys as Markdown, so the text-link sync can work from a locked entry's anchors. */
+const anchorText = (anchors: string[]) =>
+  anchors
+    .map((k) => k.split(':'))
+    .map(([type, id]) => `[](${type === 'document' ? 'doc' : 'folder'}:${id})`)
+    .join(' ');
+const linkTextOf = (r: Pick<entries.EntryRecord, 'locked' | 'anchors' | 'body'>) =>
+  r.locked ? anchorText(r.anchors) : r.body;
 
 function cleanDecision(d: DecisionMeta): DecisionMeta {
   return {
@@ -112,6 +145,7 @@ export const toSummary = (kind: EntryKind, r: entries.EntrySummaryRecord): Entry
   rev: r.rev,
   createdAt: r.createdAt,
   updatedAt: r.updatedAt,
+  locked: r.locked,
   note:
     kind === 'note'
       ? {
@@ -128,6 +162,7 @@ const toMeta = (kind: EntryKind, r: entries.EntryRecord): EntryMeta => {
   const { excerpt: _excerpt, note: _note, ...summary } = toSummary(kind, r);
   return {
     ...summary,
+    sealed: r.sealed,
     note:
       kind === 'note'
         ? {
@@ -152,6 +187,12 @@ export async function createEntry(
   input: CreateEntryRequest,
 ): Promise<Entry> {
   if (kind === 'journal' && !input.date) throw badRequest('Journal entries need a date');
+  const locked = !!input.sealed;
+  if (locked) {
+    assertLockable(kind);
+    if (input.body || input.tags?.length)
+      throw badRequest('A locked entry is sent encrypted, without readable text or tags');
+  }
   const id = entries.newId(ctx.userId, kind);
   const now = new Date().toISOString();
   const date = kind === 'journal' ? input.date! : null;
@@ -186,11 +227,15 @@ export async function createEntry(
     decided: false,
     monthDay: date ? date.slice(5) : isNote ? now.slice(5, 10) : null,
     lastSnapshotAt: null,
-    ...derived(kind, base),
+    locked,
+    sealed: input.sealed ?? null,
+    anchors: locked ? (input.anchors ?? []) : [],
+    ...(locked ? lockedDerived(kind, base.title) : derived(kind, base)),
   };
   await entries.create(ctx.userId, kind, record);
   notifyChange(ctx, kind, id);
-  if (anchorKeys(record.body).size) await syncTextLinks(ctx, { type: kind, id }, record.body);
+  const linkText = linkTextOf(record);
+  if (anchorKeys(linkText).size) await syncTextLinks(ctx, { type: kind, id }, linkText);
   await recordAction(ctx, `${kind}.created`, id);
   return toEntry(kind, record);
 }
@@ -214,7 +259,9 @@ export async function updateEntry(
   id: string,
   input: UpdateEntryRequest,
 ): Promise<EntryMeta> {
-  const content = [input.title, input.body, input.date, input.tags].some((v) => v !== undefined);
+  const content = [input.title, input.body, input.date, input.tags, input.sealed].some(
+    (v) => v !== undefined,
+  );
   const details =
     kind === 'note' &&
     [input.noteType, input.topic, input.sources, input.perspectives, input.decision].some(
@@ -242,7 +289,7 @@ async function updateEntryWith(
 ): Promise<EntryMeta> {
   let bodyBefore: string | null = null;
   const withBefore = (current: entries.EntryRecord) => {
-    bodyBefore = current.body;
+    bodyBefore = linkTextOf(current);
     return makeInput(current);
   };
   const result = await entries.update(
@@ -268,6 +315,27 @@ async function updateEntryWith(
           : current.decision;
 
       const date = kind === 'journal' ? (input.date ?? current.date) : null;
+      if (current.locked) {
+        if (input.body !== undefined || input.tags !== undefined)
+          throw badRequest('This entry is locked: its text and tags are saved encrypted');
+        const title = input.title ?? current.title;
+        return {
+          title,
+          sealed: input.sealed ?? current.sealed,
+          anchors: input.anchors ?? current.anchors,
+          date,
+          ...(date &&
+            date !== current.date && {
+              sortKey: journalSortKey(date, current.createdAt, id),
+              monthDay: date.slice(5),
+            }),
+          ...flags,
+          updatedAt: new Date().toISOString(),
+          ...lockedDerived(kind, title),
+        };
+      }
+      if (input.sealed !== undefined || input.anchors !== undefined)
+        throw badRequest('This entry is not locked');
       const next = {
         title: input.title ?? current.title,
         body: input.body ?? current.body,
@@ -313,12 +381,12 @@ async function updateEntryWith(
   notifyChange(ctx, kind, id);
   // Linked words added or removed: keep the entry's links to those files in step.
   const before = anchorKeys(bodyBefore ?? '');
-  const after = anchorKeys(result.record.body);
+  const after = anchorKeys(linkTextOf(result.record));
   if (before.size !== after.size || [...after].some((k) => !before.has(k)))
     await syncTextLinks(
       ctx,
       { type: kind, id },
-      result.record.body,
+      linkTextOf(result.record),
       undefined,
       new Set([...before].filter((k) => !after.has(k))),
     );
@@ -429,9 +497,11 @@ export async function appendToJournalDay(
   time: string,
   text: string,
 ): Promise<string> {
-  const sameDay = (await entries.listByDate(ctx.userId, date)).sort((a, b) =>
-    b.createdAt.localeCompare(a.createdAt),
-  );
+  // A locked entry can't be added to here (its text is encrypted); the capture starts a new,
+  // unlocked entry for the day instead.
+  const sameDay = (await entries.listByDate(ctx.userId, date))
+    .filter((r) => !r.locked)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const target = sameDay[0];
   if (!target) return (await createEntry(ctx, 'journal', { date, body: text })).id;
 
@@ -440,4 +510,116 @@ export async function appendToJournalDay(
   }));
   await recordAction(ctx, 'journal.edited', target.id);
   return target.id;
+}
+
+function conflictError(kind: EntryKind, current: entries.EntryRecord) {
+  return new AppError(409, 'EDIT_CONFLICT', 'This entry was changed somewhere else', {
+    current: toEntry(kind, current),
+  });
+}
+
+/**
+ * Locks an existing entry. The browser sends the text and every earlier version encrypted;
+ * the versions are overwritten first, then the entry itself (its readable body, tags, excerpt
+ * and search terms are replaced in the same write). Afterwards no readable copy of the text is
+ * left in the database. Refused if a version the browser didn't send exists.
+ */
+export async function lockEntry(
+  ctx: Ctx,
+  kind: EntryKind,
+  id: string,
+  input: LockEntryRequest,
+): Promise<Entry> {
+  assertLockable(kind);
+  const current = await entries.get(ctx.userId, kind, id);
+  if (!current) throw notFound('This entry no longer exists');
+  if (current.locked) throw new AppError(409, 'ALREADY_LOCKED', 'This entry is already locked');
+  if (current.rev !== input.rev) throw conflictError(kind, current);
+
+  const states = await versions.sealStates(ctx.userId, id);
+  const sent = new Map(input.versions.map((v) => [v.id, v.sealed]));
+  const readable = states.filter((s) => !s.sealed);
+  if (
+    readable.some((s) => !sent.has(s.id)) ||
+    input.versions.some((v) => !states.some((s) => s.id === v.id))
+  )
+    throw new AppError(409, 'VERSIONS_CHANGED', 'The version history changed; try again');
+  await versions.rewrite(
+    ctx.userId,
+    readable.map((s) => ({ id: s.id, body: '', tags: [], sealed: sent.get(s.id)! })),
+  );
+
+  const result = await entries.update(ctx.userId, kind, id, input.rev, (c) => {
+    if (c.locked) throw new AppError(409, 'ALREADY_LOCKED', 'This entry is already locked');
+    return {
+      body: '',
+      tags: [],
+      locked: true,
+      sealed: input.sealed,
+      anchors: input.anchors,
+      updatedAt: new Date().toISOString(),
+      ...lockedDerived(kind, c.title),
+    };
+  });
+  if (result.status === 'missing') throw notFound('This entry no longer exists');
+  if (result.status === 'conflict') throw conflictError(kind, result.current);
+  notifyChange(ctx, kind, id);
+  await syncTextLinks(ctx, { type: kind, id }, linkTextOf(result.record));
+  return toEntry(kind, result.record);
+}
+
+/** Removes the lock: the text and every earlier version, decrypted in the browser, readable again. */
+export async function unlockEntry(
+  ctx: Ctx,
+  kind: EntryKind,
+  id: string,
+  input: UnlockEntryRequest,
+): Promise<Entry> {
+  const current = await entries.get(ctx.userId, kind, id);
+  if (!current) throw notFound('This entry no longer exists');
+  if (!current.locked) throw new AppError(409, 'NOT_LOCKED', 'This entry is not locked');
+  if (current.rev !== input.rev) throw conflictError(kind, current);
+
+  const states = await versions.sealStates(ctx.userId, id);
+  const sent = new Map(input.versions.map((v) => [v.id, v]));
+  const sealed = states.filter((s) => s.sealed);
+  if (
+    sealed.some((s) => !sent.has(s.id)) ||
+    input.versions.some((v) => !states.some((s) => s.id === v.id))
+  )
+    throw new AppError(409, 'VERSIONS_CHANGED', 'The version history changed; try again');
+
+  const result = await entries.update(ctx.userId, kind, id, input.rev, (c) => {
+    if (!c.locked) throw new AppError(409, 'NOT_LOCKED', 'This entry is not locked');
+    const next = {
+      title: c.title,
+      body: input.body,
+      tags: normalizeTags(input.tags),
+      topic: null,
+      topicKey: null,
+      sources: [] as Source[],
+      perspectives: [] as Perspective[],
+    };
+    return {
+      body: next.body,
+      tags: next.tags,
+      locked: false,
+      sealed: null,
+      anchors: [],
+      updatedAt: new Date().toISOString(),
+      ...derived(kind, next),
+    };
+  });
+  if (result.status === 'missing') throw notFound('This entry no longer exists');
+  if (result.status === 'conflict') throw conflictError(kind, result.current);
+  await versions.rewrite(
+    ctx.userId,
+    sealed.map((s) => {
+      const v = sent.get(s.id)!;
+      return { id: s.id, body: v.body, tags: normalizeTags(v.tags), sealed: null };
+    }),
+  );
+  notifyChange(ctx, kind, id);
+  await syncTextLinks(ctx, { type: kind, id }, result.record.body);
+  return toEntry(kind, result.record);
 }

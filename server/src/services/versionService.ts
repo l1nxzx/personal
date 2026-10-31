@@ -31,7 +31,7 @@ export async function listVersions(
 export async function getVersion(ctx: Ctx, id: string): Promise<EntryVersion> {
   const v = await versions.get(ctx.userId, id);
   if (!v) throw notFound('This version no longer exists');
-  return { ...toSummary(v), body: v.body, tags: v.tags };
+  return { ...toSummary(v), body: v.body, tags: v.tags, sealed: v.sealed };
 }
 
 /** "Keep this version": stores the entry as it is now, with an optional label. */

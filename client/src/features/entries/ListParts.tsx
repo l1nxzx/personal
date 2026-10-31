@@ -1,4 +1,4 @@
-import { Plus, Search, X } from 'lucide-react';
+import { Lock, Plus, Search, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { EntryKind, TagCount } from '../../../../shared/types';
@@ -23,18 +23,34 @@ export function JournalSectionHeader({
 }) {
   const navigate = useNavigate();
   useQuickAction(quickLabel, () => navigate(newTo, { state: newState }));
+  // Journal entries and writings can be started locked (encrypted before the first save).
+  // Phones lack the room; there the editor's own lock button does it.
+  const lockable = newTo === '/journal/new' || newTo === '/writing/new';
   return (
     <PageHeader
       title="Journal & Writing"
       actions={
-        <Link
-          to={newTo}
-          state={newState}
-          className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded bg-accent-strong px-3 text-sm font-medium text-accent-ink hover:bg-accent-strong/85 sm:h-9"
-        >
-          <Plus className="h-4 w-4" strokeWidth={2.25} />
-          <span>{newLabel}</span>
-        </Link>
+        <>
+          {lockable && (
+            <Link
+              to={newTo}
+              state={{ ...(newState as object | undefined), locked: true }}
+              aria-label={newTo === '/journal/new' ? 'New locked entry' : 'New locked draft'}
+              title={newTo === '/journal/new' ? 'New locked entry' : 'New locked draft'}
+              className="touch-target hidden h-10 w-10 shrink-0 items-center justify-center rounded border border-line-strong sm:inline-flex text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink active:bg-surface-2/60 sm:h-9 sm:w-9"
+            >
+              <Lock className="h-4 w-4" strokeWidth={1.75} />
+            </Link>
+          )}
+          <Link
+            to={newTo}
+            state={newState}
+            className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded bg-accent-strong px-3 text-sm font-medium text-accent-ink hover:bg-accent-strong/85 sm:h-9"
+          >
+            <Plus className="h-4 w-4" strokeWidth={2.25} />
+            <span>{newLabel}</span>
+          </Link>
+        </>
       }
     >
       <div className="mt-4">

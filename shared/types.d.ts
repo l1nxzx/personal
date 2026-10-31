@@ -105,6 +105,19 @@ export interface NoteSummary {
   decided: boolean;
 }
 
+/** AES-GCM ciphertext made in the browser with the vault key (base64); see lib/vaultCrypto.ts. */
+export interface SealedBox {
+  iv: string;
+  data: string;
+}
+
+/** What a locked entry's (or a locked version's) sealed box holds. */
+export interface SealedEntryContent {
+  body: string;
+  tags: string[];
+  wordCount: number;
+}
+
 export interface Entry {
   id: string;
   kind: EntryKind;
@@ -123,9 +136,16 @@ export interface Entry {
   updatedAt: string;
   /** Knowledge notes only. */
   note: NoteMeta | null;
+  /**
+   * Locked with the PIN (journal and writing only): the text, tags and word count are in
+   * `sealed`, encrypted in the browser; the server stores only the title in readable form,
+   * and `body`/`tags` are empty.
+   */
+  locked: boolean;
+  sealed: SealedBox | null;
 }
 
-export type EntrySummary = Omit<Entry, 'body' | 'note'> & {
+export type EntrySummary = Omit<Entry, 'body' | 'note' | 'sealed'> & {
   excerpt: string;
   note: NoteSummary | null;
 };
@@ -141,6 +161,10 @@ export interface CreateEntryRequest {
   sources?: Source[];
   /** Beliefs only. */
   perspectives?: Perspective[];
+  /** Create it locked: the text never reaches the server readable (no `body` or `tags`). */
+  sealed?: SealedBox;
+  /** Locked entries: the files and folders its text links to (`document:<id>`, `folder:<id>`). */
+  anchors?: string[];
 }
 
 export interface UpdateEntryRequest {
@@ -157,6 +181,26 @@ export interface UpdateEntryRequest {
   sources?: Source[];
   perspectives?: Perspective[];
   decision?: DecisionMeta | null;
+  /** Locked entries only, instead of `body` and `tags`. */
+  sealed?: SealedBox;
+  anchors?: string[];
+}
+
+/** Lock an existing entry: its text and every earlier version, encrypted in the browser. */
+export interface LockEntryRequest {
+  rev: number;
+  sealed: SealedBox;
+  anchors: string[];
+  /** Every version that isn't sealed yet. */
+  versions: { id: string; sealed: SealedBox }[];
+}
+
+/** Remove the lock: the text and every earlier version, decrypted in the browser. */
+export interface UnlockEntryRequest {
+  rev: number;
+  body: string;
+  tags: string[];
+  versions: { id: string; body: string; tags: string[] }[];
 }
 
 /** details of a 409 EDIT_CONFLICT error */
@@ -663,6 +707,8 @@ export interface EntryVersionSummary {
 export interface EntryVersion extends EntryVersionSummary {
   body: string;
   tags: string[];
+  /** Set when the version is encrypted (a locked entry's history); body and tags are empty. */
+  sealed: SealedBox | null;
 }
 
 // ---------------------------------------------------------------- Weekly review

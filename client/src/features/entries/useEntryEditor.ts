@@ -5,12 +5,28 @@ import type {
   EditConflictDetails,
   Entry,
   EntryKind,
+  SealedBox,
 } from '../../../../shared/types';
 import { ApiError } from '../../lib/apiFetch';
 import { keys } from '../../lib/keys';
 import { readJSON, removeKey, writeJSON } from '../../lib/storage';
 import { anchorsIn } from '../../lib/anchors';
 import { createEntry, patchEntry, useInvalidateEntryLists } from './api';
+
+/** Link keys of the files and folders a text links to (`document:<id>`), for locked saves. */
+export const anchorKeysOf = (body: string) => [
+  ...new Set(anchorsIn(body).map((a) => `${a.ref.type}:${a.ref.id}`)),
+];
+
+/**
+ * How a locked entry is saved and read: its text and tags go to the server only as `sealed`
+ * (encrypted here), and arrive the same way. No local drafts are kept for it.
+ */
+export interface EntryCipher {
+  seal: (fields: Fields) => Promise<{ sealed: SealedBox; anchors: string[] }>;
+  /** The readable form of an entry from the server (a conflict, for instance). */
+  open: (entry: Entry) => Promise<Entry>;
+}
 
 const anchorSignature = (body: string) =>
   anchorsIn(body)
@@ -70,8 +86,12 @@ export function useEntryEditor(
     onCreated?: (entry: Entry) => void;
     /** Extra fields sent when a new entry is first created (e.g. a note's type and topic). */
     createExtra?: () => Partial<CreateEntryRequest>;
+    /** Set for a locked entry (read at save time, so a new entry can be locked before it exists). */
+    cipher?: EntryCipher | null;
   },
 ) {
+  const cipherRef = useRef(opts.cipher ?? null);
+  cipherRef.current = opts.cipher ?? null;
   const qc = useQueryClient();
   const invalidateLists = useInvalidateEntryLists();
 
@@ -84,7 +104,8 @@ export function useEntryEditor(
 
   // Decide the initial text once: server version, or a newer local draft from this device.
   const [initial] = useState(() => {
-    const local = readJSON<LocalDraft>(draftKey(kind, idRef.current));
+    // Locked text is never kept on the device in readable form.
+    const local = cipherRef.current ? null : readJSON<LocalDraft>(draftKey(kind, idRef.current));
     const server = entry ? fieldsOf(entry) : blankNew;
     if (!local || equal(local.fields, server) || isBlank(local.fields)) {
       return { fields: server, notice: null as RestoreNotice };
@@ -126,7 +147,7 @@ export function useEntryEditor(
   const writeDraftNow = useCallback(() => {
     clearTimeout(draftTimer.current);
     const f = fieldsRef.current;
-    if (equal(f, savedRef.current)) removeKey(draftKey(kind, idRef.current));
+    if (cipherRef.current || equal(f, savedRef.current)) removeKey(draftKey(kind, idRef.current));
     else
       writeJSON(draftKey(kind, idRef.current), {
         fields: f,
@@ -152,12 +173,12 @@ export function useEntryEditor(
     inFlight.current = true;
     setStatus('saving');
     try {
+      const cipher = cipherRef.current;
       if (!idRef.current) {
         const created = await createEntry(kind, {
           ...opts.createExtra?.(),
           title: snapshot.title,
-          body: snapshot.body,
-          tags: snapshot.tags,
+          ...(cipher ? await cipher.seal(snapshot) : { body: snapshot.body, tags: snapshot.tags }),
           ...(kind === 'journal' && snapshot.date ? { date: snapshot.date } : {}),
         });
         removeKey(draftKey(kind, null));
@@ -166,15 +187,21 @@ export function useEntryEditor(
         qc.setQueryData(keys.entry(kind, created.id), created);
         opts.onCreated?.(created);
       } else {
+        const textChanged = snapshot.body !== saved.body || !sameTags(snapshot.tags, saved.tags);
         const meta = await patchEntry(kind, idRef.current, {
           rev: revRef.current,
           ...(snapshot.title !== saved.title && { title: snapshot.title }),
-          ...(snapshot.body !== saved.body && { body: snapshot.body }),
+          ...(cipher
+            ? textChanged && (await cipher.seal(snapshot))
+            : {
+                ...(snapshot.body !== saved.body && { body: snapshot.body }),
+                ...(!sameTags(snapshot.tags, saved.tags) && { tags: snapshot.tags }),
+              }),
           ...(snapshot.date !== saved.date && snapshot.date && { date: snapshot.date }),
-          ...(!sameTags(snapshot.tags, saved.tags) && { tags: snapshot.tags }),
         });
         revRef.current = meta.rev;
-        qc.setQueryData(keys.entry(kind, meta.id), { ...meta, body: snapshot.body });
+        // A locked entry's cache holds only what the server has: the sealed text.
+        qc.setQueryData(keys.entry(kind, meta.id), { ...meta, body: cipher ? '' : snapshot.body });
       }
       // Linked words added or removed: the server linked or unlinked those files, so refresh
       // every "Linked" list (also when this save finishes after the editor has closed).
@@ -198,7 +225,9 @@ export function useEntryEditor(
     } catch (err) {
       writeDraftNow();
       if (err instanceof ApiError && err.code === 'EDIT_CONFLICT') {
-        setConflict((err.details as EditConflictDetails).current);
+        const current = (err.details as EditConflictDetails).current;
+        const cipher = cipherRef.current;
+        setConflict(cipher && current.locked ? await cipher.open(current) : current);
         setStatus('conflict');
       } else if (err instanceof ApiError && err.status === 404) {
         setErrorText('This entry was deleted somewhere else. Your text is still here.');
@@ -379,6 +408,17 @@ export function useEntryEditor(
     void flush();
   }, [flush]);
 
+  /**
+   * Stops autosaving and waits for a save in progress; returns the entry's id (null if never
+   * saved) and stored rev, for lock and unlock.
+   */
+  const settle = useCallback(async (): Promise<{ id: string | null; rev: number }> => {
+    clearTimeout(timer.current);
+    while (inFlight.current) await new Promise((r) => setTimeout(r, 100));
+    clearTimeout(timer.current);
+    return { id: idRef.current, rev: revRef.current };
+  }, []);
+
   /** Forgets local state before deleting the entry. */
   const forget = useCallback(() => {
     clearTimeout(timer.current);
@@ -407,5 +447,6 @@ export function useEntryEditor(
     dismissNotice: () => setNotice(null),
     saveAsNew,
     forget,
+    settle,
   };
 }

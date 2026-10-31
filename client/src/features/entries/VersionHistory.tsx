@@ -12,6 +12,8 @@ import { apiFetch, errorMessage } from '../../lib/apiFetch';
 import { cn } from '../../lib/cn';
 import { proseDiff } from '../../lib/diff';
 import { ENTRY_API } from '../../lib/routes';
+import { useEntryLock } from './EntryLockContext';
+import { openVersion } from './locking';
 
 const when = (iso: string) =>
   new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(
@@ -212,10 +214,15 @@ function VersionView({
   onRestore: (v: EntryVersion) => void;
 }) {
   const [mode, setMode] = useState<'compare' | 'read'>('compare');
+  const lock = useEntryLock();
   const q = useQuery({
     queryKey: ['version', id],
-    queryFn: async () => (await apiFetch<{ version: EntryVersion }>(`/versions/${id}`)).version,
+    // A locked entry's versions are decrypted here; the readable text is kept in memory only
+    // briefly (never stored).
+    queryFn: async () =>
+      openVersion(lock, (await apiFetch<{ version: EntryVersion }>(`/versions/${id}`)).version),
     staleTime: Infinity,
+    gcTime: 60_000,
   });
   if (!q.data)
     return q.isError ? <p className="text-sm text-bad">{errorMessage(q.error)}</p> : <Loading />;
