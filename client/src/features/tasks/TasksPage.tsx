@@ -17,6 +17,7 @@ import { AddTask } from './AddTask';
 import { useDoneTasks, useOpenTasks, useUpdateTask } from './api';
 import { TaskRow, TaskRowSkeleton } from './TaskRow';
 import { byNextAction, openByProject, todayGroups, upcomingGroups } from './views';
+import { useQuickAction, useUI } from '../../context/UIContext';
 
 export type TaskView = 'today' | 'upcoming' | 'done' | 'all' | 'projects';
 
@@ -167,6 +168,7 @@ function OpenView({ view }: { view: Exclude<TaskView, 'done' | 'projects'> }) {
         <AddTask
           planToday={view === 'today'}
           placeholder={view === 'today' ? 'Add a task for today' : 'Add a task'}
+          quickAction={view === 'today' ? 'Add a task for today' : 'Add a task'}
         />
       </div>
       {body()}
@@ -288,6 +290,9 @@ function ByProject({ tasks }: { tasks: Task[] }) {
 
 function DoneView() {
   const done = useDoneTasks();
+  // No add field here; a new task goes through Quick Capture, already set to Task.
+  const { openCapture } = useUI();
+  useQuickAction('New task', () => openCapture({ kind: 'task' }));
   if (done.isLoading)
     return (
       <Skeleton>

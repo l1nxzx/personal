@@ -12,7 +12,7 @@ Goal: a calm, personal notebook. It must **not** look like a generic AI-made or 
 
 ## Layout
 
-- Signed-in pages render inside `AppShell`: sidebar at `lg` (offset `lg:pl-[13.5rem]`), bottom `MobileNav` on phones (Home, Journal, Capture, Projects, More), hidden in editors.
+- Signed-in pages render inside `AppShell`: sidebar at `lg` (offset `lg:pl-[13.5rem]`), bottom `MobileNav` on phones (Home, Journal, the plus, Projects, More), hidden in editors. The plus is the page's own most common action, registered with `useQuickAction` (`context/UIContext.tsx`; helpers `focusForTyping`, `focusFirstFieldIn`), and Quick Capture where a page has none. Its accessible name is the action's name.
 - **All pages share one content frame**: `PAGE_FRAME` in `components/shell/PageHeader.tsx` (`mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-10`). `<Page width="narrow|default|wide">` limits how far a page extends to the right but always starts at the frame's left edge. Never center a page independently or add per-page left offsets; that was the cause of horizontal jumps between sections. `html` has `scrollbar-gutter: stable` for the same reason (fine pointers only; touch screens hide scrollbars).
 - Journal/note editors (`EditorPage`) are a deliberate exception: a centered full-screen writing view.
 - Mobile is first class: 16 px gutters, large touch targets (`h-10`/`h-9` on phones, smaller from `sm`), no horizontal overflow.

@@ -14,6 +14,7 @@ import { useSearch } from '../me/api';
 import { useNoteList, useTags, useTopics } from './api';
 import { EntryRowsSkeleton, FilterSearch, TagFilter } from './ListParts';
 import { NOTE_TYPES, noteTypeLabel } from './NoteDetails';
+import { useQuickAction } from '../../context/UIContext';
 
 /** One knowledge note in a list: title (or its first words), kind, topic, last touched. */
 export function NoteRow({ e, showTopic = true }: { e: EntrySummary; showTopic?: boolean }) {
@@ -89,6 +90,7 @@ const TYPE_FILTERS: { value: NoteType | ''; label: string }[] = [
 
 /** Ideas & Knowledge: notes to keep working with, browsable by topic, kind and tag. */
 export default function IdeasPage() {
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const topic = params.get('topic') ?? undefined;
   const type = (params.get('type') as NoteType | null) ?? undefined;
@@ -112,6 +114,7 @@ export default function IdeasPage() {
   const tags = useTags('note');
   const search = useSearch(deferredQ);
   const items = list.data?.pages.flatMap((p) => p.items) ?? [];
+  useQuickAction('New note', () => navigate('/ideas/new', { state: { topic } }));
 
   return (
     <Page width="wide">

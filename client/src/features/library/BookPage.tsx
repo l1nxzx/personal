@@ -17,6 +17,7 @@ import { today } from '../../lib/dates';
 import { LinksPanel } from '../links/LinksPanel';
 import { useBook, useDeleteBook, useQuoteToNote, useUpdateBook } from './api';
 import { BOOK_STATUS } from './LibraryPage';
+import { useQuickAction } from '../../context/UIContext';
 
 const newId = () => Math.random().toString(36).slice(2, 10);
 
@@ -298,6 +299,7 @@ function QuoteForm({
 
 function Quotes({ book, onChange }: { book: Book; onChange: (q: Quote[]) => void }) {
   const [adding, setAdding] = useState(false);
+  useQuickAction('Add a quote', () => setAdding(true));
   const [editing, setEditing] = useState<string | null>(null);
   const toNote = useQuoteToNote(book.id);
   const toast = useToast();

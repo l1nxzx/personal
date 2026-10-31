@@ -1,8 +1,9 @@
 import { Plus, Search, X } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { EntryKind, TagCount } from '../../../../shared/types';
 import { PageHeader } from '../../components/shell/PageHeader';
+import { useQuickAction } from '../../context/UIContext';
 import { cn } from '../../lib/cn';
 import { TabLinks } from '../../components/ui/misc';
 import { Skeleton, SkeletonText, skeletonWidth } from '../../components/ui/Skeleton';
@@ -12,11 +13,16 @@ export function JournalSectionHeader({
   newTo,
   newLabel,
   newState,
+  quickLabel = newLabel,
 }: {
   newTo: string;
   newLabel: string;
   newState?: unknown;
+  /** Name of the same action on the phone navigation's plus button. */
+  quickLabel?: string;
 }) {
+  const navigate = useNavigate();
+  useQuickAction(quickLabel, () => navigate(newTo, { state: newState }));
   return (
     <PageHeader
       title="Journal & Writing"

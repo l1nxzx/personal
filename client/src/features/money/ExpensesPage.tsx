@@ -1,5 +1,5 @@
 import { Ellipsis, Plus } from 'lucide-react';
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { Expense, ExpenseSummary, Frequency, Subscription } from '../../../../shared/types';
@@ -41,6 +41,7 @@ import {
 } from './money';
 import { HistorySkeleton, Pending } from './MoneySkeletons';
 import { MoneyTabs } from './MoneyTabs';
+import { focusFirstFieldIn, useQuickAction } from '../../context/UIContext';
 
 type Period = 'all' | 'year' | 'month';
 
@@ -70,6 +71,8 @@ function totalsFor(summary: ExpenseSummary | undefined, from: string, to: string
 /** Recorded expenses (actual) and subscriptions (projections until a payment is recorded). */
 export default function ExpensesPage() {
   const prefs = usePrefs();
+  const addRef = useRef<HTMLElement>(null);
+  useQuickAction('Record an expense', () => focusFirstFieldIn(addRef.current));
   const base = prefs.data?.baseCurrency ?? 'EUR';
   const summary = useExpenseSummary();
   const subs = useSubscriptions();
@@ -165,7 +168,7 @@ export default function ExpensesPage() {
         </div>
       </section>
 
-      <section aria-labelledby="add-expense" className="mt-10">
+      <section ref={addRef} aria-labelledby="add-expense" className="mt-10">
         <h2 id="add-expense" className="section-label mb-3">
           Record an expense
         </h2>

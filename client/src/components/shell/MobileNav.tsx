@@ -27,12 +27,13 @@ function Tab({ item, pathname }: { item: NavItem; pathname: string }) {
 }
 
 /**
- * Phone navigation: Home, Journal, Capture (center, thumb-reachable), Projects, More.
+ * Phone navigation: Home, Journal, the plus (center, thumb-reachable: the page's quick action,
+ * else Capture), Projects, More.
  * Everything else lives in the More sheet.
  */
 export function MobileNav() {
   const { pathname } = useLocation();
-  const { openCapture } = useUI();
+  const { openCapture, quickAction } = useUI();
   const [moreOpen, setMoreOpen] = useState(false);
 
   const [home, journal, tasks] = PRIMARY.map((p) => NAV.find((n) => n.to === p)!);
@@ -51,8 +52,10 @@ export function MobileNav() {
           <div className="flex flex-1 items-center justify-center">
             <button
               type="button"
-              onClick={() => openCapture()}
-              aria-label="Capture"
+              // The page's own most common action (useQuickAction); otherwise Quick Capture.
+              onClick={() => (quickAction ? quickAction.run() : openCapture())}
+              aria-label={quickAction?.label ?? 'Capture'}
+              title={quickAction?.label ?? 'Capture'}
               className="flex h-10 w-12 items-center justify-center rounded-md bg-accent-strong text-accent-ink transition-colors active:bg-accent-strong/75"
             >
               <Plus className="h-5 w-5" strokeWidth={2.25} />

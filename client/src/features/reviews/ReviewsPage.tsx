@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { WeekContext, WeeklyReview, WeeklyReviewAnswers } from '../../../../shared/types';
 import { Page } from '../../components/shell/PageHeader';
@@ -12,6 +13,7 @@ import { apiFetch, errorMessage } from '../../lib/apiFetch';
 import { addDays, formatRelativeDay, parseLocalDate, today, toLocalDate } from '../../lib/dates';
 import { JournalSectionHeader } from '../entries/ListParts';
 import { formatMoney } from '../money/money';
+import { focusFirstFieldIn, useQuickAction } from '../../context/UIContext';
 
 export const QUESTIONS: { key: keyof WeeklyReviewAnswers; question: string }[] = [
   { key: 'happened', question: 'What happened this week?' },
@@ -67,6 +69,13 @@ export default function ReviewsPage() {
       })
       .catch((err) => toast({ message: `Not saved: ${errorMessage(err)}`, tone: 'error' }));
 
+  const answersRef = useRef<HTMLDivElement>(null);
+  useQuickAction(
+    data.isSuccess ? "Answer this week's review" : null,
+    () => focusFirstFieldIn(answersRef.current, { emptyFirst: true }),
+    { priority: 1 },
+  );
+
   const go = (delta: number) => setParams({ week: addDays(week, delta * 7) }, { replace: true });
 
   return (
@@ -100,7 +109,7 @@ export default function ReviewsPage() {
       ) : (
         <>
           <WeekFacts context={data.data!.context} />
-          <div className="mt-8 space-y-8">
+          <div ref={answersRef} className="mt-8 space-y-8">
             {QUESTIONS.map((q) => (
               <section key={`${week}:${q.key}`} aria-labelledby={`q-${q.key}`}>
                 <h3

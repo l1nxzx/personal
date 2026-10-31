@@ -1,10 +1,11 @@
 import { CalendarDays, Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useToast } from '../../context/ToastContext';
 import { errorMessage } from '../../lib/apiFetch';
 import { cn } from '../../lib/cn';
 import { formatRelativeDay, today } from '../../lib/dates';
 import { useCreateTask } from './api';
+import { focusForTyping, useQuickAction } from '../../context/UIContext';
 
 /**
  * Inline "add a task" line. Enter adds it and keeps the field ready for the next one.
@@ -14,11 +15,16 @@ export function AddTask({
   planToday,
   projectId,
   placeholder = 'Add a task',
+  quickAction,
 }: {
   planToday?: boolean;
   projectId?: string;
   placeholder?: string;
+  /** Make the phone navigation's plus button start typing here, under this name. */
+  quickAction?: string;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  useQuickAction(quickAction ?? null, () => focusForTyping(inputRef.current));
   const [title, setTitle] = useState('');
   const [due, setDue] = useState('');
   const create = useCreateTask();
@@ -54,6 +60,7 @@ export function AddTask({
     >
       <Plus className="h-[18px] w-[18px] shrink-0 text-ink-faint" strokeWidth={1.75} aria-hidden />
       <input
+        ref={inputRef}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder={placeholder}

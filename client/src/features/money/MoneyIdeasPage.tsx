@@ -1,5 +1,5 @@
 import { ChevronDown, Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { MoneyIdeaStatus, MoneyIdeaSummary } from '../../../../shared/types';
 import { Page, PageHeader } from '../../components/shell/PageHeader';
@@ -15,6 +15,7 @@ import { useProjectNames } from '../projects/api';
 import { STATUS, useCreateMoneyIdea, useMoneyIdeas, useSetIdeaStatus } from './ideasApi';
 import { formatMoney } from './money';
 import { MoneyTabs } from './MoneyTabs';
+import { focusFirstFieldIn, useQuickAction } from '../../context/UIContext';
 
 const GROUPS: { status: MoneyIdeaStatus; title: string; empty?: string }[] = [
   { status: 'testing', title: 'Testing' },
@@ -32,6 +33,8 @@ export default function MoneyIdeasPage() {
   const create = useCreateMoneyIdea();
   const toast = useToast();
   const navigate = useNavigate();
+  const addRef = useRef<HTMLFormElement>(null);
+  useQuickAction('New money idea', () => focusFirstFieldIn(addRef.current));
   const [name, setName] = useState('');
 
   const f = filter.trim().toLowerCase();
@@ -64,6 +67,7 @@ export default function MoneyIdeasPage() {
       </PageHeader>
 
       <form
+        ref={addRef}
         onSubmit={(e) => {
           e.preventDefault();
           add();
