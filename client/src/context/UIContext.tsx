@@ -44,6 +44,9 @@ interface UIValue {
   /** The current page's quick action, if it has one. */
   quickAction: QuickAction | null;
   registerQuickAction: (entry: QuickActionEntry) => () => void;
+  /** Something private is on screen (an encrypted entry): no usage time is recorded. */
+  hiddenFromStats: boolean;
+  hideFromStats: () => () => void;
 }
 
 const UIContext = createContext<UIValue | null>(null);
@@ -65,6 +68,12 @@ export function UIProvider({ children }: { children: ReactNode }) {
     setSearchOpen(true);
   }, []);
   const closeSearch = useCallback(() => setSearchOpen(false), []);
+
+  const [hiddenCount, setHiddenCount] = useState(0);
+  const hideFromStats = useCallback(() => {
+    setHiddenCount((n) => n + 1);
+    return () => setHiddenCount((n) => n - 1);
+  }, []);
 
   const [quickEntries, setQuickEntries] = useState<QuickActionEntry[]>([]);
   const registerQuickAction = useCallback((entry: QuickActionEntry) => {
@@ -91,8 +100,12 @@ export function UIProvider({ children }: { children: ReactNode }) {
       closeSearch,
       quickAction,
       registerQuickAction,
+      hiddenFromStats: hiddenCount > 0,
+      hideFromStats,
     }),
     [
+      hiddenCount,
+      hideFromStats,
       captureOpen,
       captureSeed,
       openCapture,
@@ -168,4 +181,10 @@ export function focusFirstFieldIn(
     return true;
   };
   if (!run()) requestAnimationFrame(() => void run());
+}
+
+/** While `active`, the screen counts as private: the section's time isn't recorded. */
+export function useHideFromStats(active: boolean) {
+  const { hideFromStats } = useUI();
+  useEffect(() => (active ? hideFromStats() : undefined), [active, hideFromStats]);
 }

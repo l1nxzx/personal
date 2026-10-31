@@ -13,7 +13,7 @@ import { cn } from '../../lib/cn';
 import { proseDiff } from '../../lib/diff';
 import { ENTRY_API } from '../../lib/routes';
 import { useEntryLock } from './EntryLockContext';
-import { openVersion } from './locking';
+import { countWords, openVersion } from './locking';
 
 const when = (iso: string) =>
   new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(
@@ -50,6 +50,7 @@ export function VersionHistory({
   entryId,
   current,
   onRestore,
+  locked = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -57,6 +58,8 @@ export function VersionHistory({
   entryId: string;
   current: Current;
   onRestore: (v: Current) => void;
+  /** Encrypted entry: versions kept by hand are encrypted here, label included. */
+  locked?: boolean;
 }) {
   return (
     <Dialog
@@ -74,6 +77,7 @@ export function VersionHistory({
           current={current}
           onRestore={onRestore}
           onClose={onClose}
+          locked={locked}
         />
       )}
     </Dialog>
@@ -86,13 +90,16 @@ function Panel({
   current,
   onRestore,
   onClose,
+  locked,
 }: {
   kind: EntryKind;
   entryId: string;
   current: Current;
   onRestore: (v: Current) => void;
   onClose: () => void;
+  locked: boolean;
 }) {
+  const lock = useEntryLock();
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
@@ -101,10 +108,20 @@ function Panel({
   const [selected, setSelected] = useState<string | null>(null);
   const [label, setLabel] = useState('');
   const keep = useMutation({
-    mutationFn: (l: string | null) =>
+    mutationFn: async (l: string | null) =>
       apiFetch<{ version: EntryVersionSummary }>(`${ENTRY_API[kind]}/${entryId}/versions`, {
         method: 'POST',
-        body: { label: l },
+        body: locked
+          ? {
+              label: null,
+              sealed: await lock.seal({
+                body: current.body,
+                tags: current.tags,
+                wordCount: countWords(current.body),
+                label: l,
+              }),
+            }
+          : { label: l },
       }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: key }),
   });

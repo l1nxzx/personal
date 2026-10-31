@@ -81,7 +81,10 @@ export function AppShell({ preload }: { preload?: () => void }) {
 
   useRealtime(true);
   // Time is recorded for the section on screen (`lib/sections.ts`).
-  useActivityTracking(user?.id, sectionOf(useLocation().pathname));
+  // An encrypted entry on screen is left out entirely, like the vault.
+  const { hiddenFromStats } = useUI();
+  const section = sectionOf(useLocation().pathname);
+  useActivityTracking(user?.id, hiddenFromStats ? null : section);
 
   useKeydown((e) => {
     if (e.defaultPrevented) return;

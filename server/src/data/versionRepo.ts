@@ -40,9 +40,11 @@ export async function add(
   kind: EntryKind,
   entry: EntryRecord,
   label: string | null,
+  /** A locked entry's version, encrypted in the browser (label included). */
+  sealed?: SealedBox,
 ): Promise<string> {
   const ref = col(uid).doc();
-  await ref.set(versionOf(kind, entry, label));
+  await ref.set({ ...versionOf(kind, entry, label), ...(sealed && { sealed }) });
   return ref.id;
 }
 
@@ -82,7 +84,14 @@ export async function sealStates(uid: string, entryId: string) {
  */
 export async function rewrite(
   uid: string,
-  patches: { id: string; body: string; tags: string[]; sealed: SealedBox | null }[],
+  patches: {
+    id: string;
+    body: string;
+    tags: string[];
+    sealed: SealedBox | null;
+    wordCount: number;
+    label: string | null;
+  }[],
 ): Promise<void> {
   const LIMIT_BYTES = 4_000_000;
   let batch = db().batch();
@@ -96,7 +105,8 @@ export async function rewrite(
       bytes = 0;
       count = 0;
     }
-    batch.update(col(uid).doc(p.id), { body: p.body, tags: p.tags, sealed: p.sealed });
+    const { id, ...fields } = p;
+    batch.update(col(uid).doc(id), fields);
     bytes += size;
     count++;
   }

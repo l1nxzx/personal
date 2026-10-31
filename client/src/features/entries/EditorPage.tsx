@@ -61,6 +61,7 @@ import { useEntryLock } from './EntryLockContext';
 import { lockExisting, openEntry, sealFields, unlockExisting } from './locking';
 import { VersionHistory } from './VersionHistory';
 import { EntryMetadata } from './EntryMetadata';
+import { useHideFromStats } from '../../context/UIContext';
 
 const MarkdownView = lazy(() => import('./MarkdownView'));
 
@@ -124,6 +125,7 @@ function LockedGate({
   error?: string;
 }) {
   const lock = useEntryLock();
+  useHideFromStats(true);
   const asked = useRef(false);
   useEffect(() => {
     // Ask straight away once; after that, the button. Not after "Lock now": the point was to
@@ -367,6 +369,8 @@ function Editor({
     [locked, lock],
   );
   const [lockBusy, setLockBusy] = useState(false);
+  // No usage statistics while an encrypted entry is on screen (as in the vault).
+  useHideFromStats(locked);
 
   const ed = useEntryEditor(kind, entry, {
     cipher,
@@ -986,6 +990,7 @@ function Editor({
             entryId={ed.id}
             current={{ title: ed.fields.title, body: ed.fields.body, tags: ed.fields.tags }}
             onRestore={(v) => ed.setFields(v)}
+            locked={locked}
           />
           {live && (
             <EntryMetadata

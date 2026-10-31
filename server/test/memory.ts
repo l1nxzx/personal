@@ -302,9 +302,19 @@ export function ageEntry(uid: string, kind: EntryKind, id: string, ms: number) {
 }
 
 export const versionRepo = {
-  async add(uid: string, kind: EntryKind, entry: EntryRecord, label: string | null) {
+  async add(
+    uid: string,
+    kind: EntryKind,
+    entry: EntryRecord,
+    label: string | null,
+    sealed?: VersionRecord['sealed'],
+  ) {
     const id = newId();
-    stores.versions.set(id, { id, ...versionOf(kind, clone(entry), label) });
+    stores.versions.set(id, {
+      id,
+      ...versionOf(kind, clone(entry), label),
+      ...(sealed && { sealed: clone(sealed) }),
+    });
     return id;
   },
   async listFor(_uid: string, entryId: string) {
@@ -324,11 +334,18 @@ export const versionRepo = {
   },
   async rewrite(
     _uid: string,
-    patches: { id: string; body: string; tags: string[]; sealed: VersionRecord['sealed'] }[],
+    patches: {
+      id: string;
+      body: string;
+      tags: string[];
+      sealed: VersionRecord['sealed'];
+      wordCount: number;
+      label: string | null;
+    }[],
   ) {
-    for (const p of patches) {
-      const v = stores.versions.get(p.id);
-      if (v) stores.versions.set(p.id, { ...v, body: p.body, tags: p.tags, sealed: p.sealed });
+    for (const { id, ...fields } of patches) {
+      const v = stores.versions.get(id);
+      if (v) stores.versions.set(id, { ...v, ...clone(fields) });
     }
   },
   /** Test helper: every stored version of an entry, as stored. */
