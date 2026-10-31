@@ -1,5 +1,5 @@
 import { ChevronDown, Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { Project, Task } from '../../../../shared/types';
 import { Empty, ErrorNote } from '../../components/ui/misc';
@@ -14,6 +14,7 @@ import { TaskRow, TaskRowSkeleton } from '../tasks/TaskRow';
 import { openByProject } from '../tasks/views';
 import { useCreateProject, useProjects, useProjectTaskCounts } from './api';
 import { ProgressLine, purposeOf, targetLabel } from './ProjectParts';
+import { focusForTyping, useQuickAction } from '../../context/UIContext';
 
 export const STATUS_LABEL: Record<Project['status'], string> = {
   active: 'Active',
@@ -147,6 +148,8 @@ function NewProject() {
   const toast = useToast();
   const navigate = useNavigate();
   const [name, setName] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+  useQuickAction('New project', () => focusForTyping(inputRef.current));
 
   const submit = () => {
     const n = name.trim();
@@ -173,6 +176,7 @@ function NewProject() {
     >
       <Plus className="h-[18px] w-[18px] shrink-0 text-ink-faint" strokeWidth={1.75} aria-hidden />
       <input
+        ref={inputRef}
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Start a project"

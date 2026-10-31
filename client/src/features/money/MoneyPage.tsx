@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { IncomeEntry, IncomeStatus } from '../../../../shared/types';
@@ -37,9 +37,12 @@ import {
   rangeTotals,
   shiftMonth,
 } from './money';
+import { focusFirstFieldIn, useQuickAction } from '../../context/UIContext';
 
 export default function MoneyPage() {
   const prefs = usePrefs();
+  const addRef = useRef<HTMLElement>(null);
+  useQuickAction('Record income', () => focusFirstFieldIn(addRef.current));
   const summary = useIncomeSummary();
   const base = prefs.data?.baseCurrency ?? 'EUR';
   const [currency, setCurrency] = useState<string | null>(null);
@@ -120,7 +123,7 @@ export default function MoneyPage() {
         ))}
       </section>
 
-      <section aria-labelledby="add-income" className="mt-10">
+      <section ref={addRef} aria-labelledby="add-income" className="mt-10">
         <h2 id="add-income" className="section-label mb-3">
           Record income
         </h2>

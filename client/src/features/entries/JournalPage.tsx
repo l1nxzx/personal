@@ -51,7 +51,11 @@ export default function JournalPage() {
 
   return (
     <Page width="default">
-      <JournalSectionHeader newTo="/journal/new" newLabel="New entry" />
+      <JournalSectionHeader
+        newTo="/journal/new"
+        newLabel="New entry"
+        quickLabel="New journal entry"
+      />
 
       <div className="mt-4 flex flex-col gap-3">
         <div className="flex gap-2">

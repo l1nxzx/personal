@@ -16,6 +16,7 @@ import { formatSize } from '../documents/api';
 import { usePrefs } from '../me/api';
 import { MarkdownEditor } from '../entries/MarkdownEditor';
 import { useVault, type DecryptedItem, type VaultContent } from './VaultContext';
+import { useQuickAction } from '../../context/UIContext';
 
 type TextKind = 'entry' | 'instructions';
 type ContentOf<K extends VaultContent['kind']> = Extract<VaultContent, { kind: K }>;
@@ -29,6 +30,9 @@ export function TextTab({ kind, initialId }: { kind: TextKind; initialId?: strin
   const vault = useVault();
   const [open, setOpen] = useState<string | 'new' | null>(initialId ?? null);
   const items = vault.items.filter((i) => i.content.kind === kind).sort(byNewest);
+  useQuickAction(open ? null : kind === 'entry' ? 'New private entry' : 'New instructions', () =>
+    setOpen('new'),
+  );
 
   if (open) {
     const item = open === 'new' ? null : (vault.items.find((i) => i.id === open) ?? null);
@@ -258,6 +262,7 @@ export function DocumentsTab() {
     null,
   );
   const docs = vault.items.filter((i) => i.content.kind === 'document').sort(byNewest);
+  useQuickAction(busy ? null : 'Add private documents', () => input.current?.click());
 
   useEffect(
     () => () => {
@@ -432,6 +437,7 @@ export function AccountsTab({ initialId }: { initialId?: string | null }) {
   const [editing, setEditing] = useState<DecryptedItem | 'new' | null>(
     () => vault.items.find((i) => i.id === initialId) ?? null,
   );
+  useQuickAction(editing ? null : 'Add an account', () => setEditing('new'));
   const accounts = vault.items
     .filter((i) => i.content.kind === 'account')
     .sort((a, b) =>

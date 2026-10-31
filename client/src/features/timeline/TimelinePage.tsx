@@ -14,11 +14,13 @@ import { hrefFor, TYPE_LABEL } from '../../lib/routes';
 import { JournalSectionHeader } from '../entries/ListParts';
 import { useMomentMutations, useMoments } from './api';
 import { MomentDialog } from './MomentDialog';
+import { useQuickAction } from '../../context/UIContext';
 
 /** The life timeline: moments chosen by hand, newest first, grouped by year. */
 export default function TimelinePage() {
   const moments = useMoments();
   const [adding, setAdding] = useState(false);
+  useQuickAction('Add moment', () => setAdding(true), { priority: 1 });
   const [editing, setEditing] = useState<Moment | null>(null);
   const { remove } = useMomentMutations();
   const confirm = useConfirm();

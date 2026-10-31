@@ -1,5 +1,5 @@
 import { Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { BookStatus, BookSummary } from '../../../../shared/types';
 import { Page, PageHeader } from '../../components/shell/PageHeader';
@@ -11,6 +11,7 @@ import { errorMessage } from '../../lib/apiFetch';
 import { cn } from '../../lib/cn';
 import { formatRelativeDay, parseLocalDate } from '../../lib/dates';
 import { useBooks, useCreateBook } from './api';
+import { focusFirstFieldIn, useQuickAction } from '../../context/UIContext';
 
 export const BOOK_STATUS: { value: BookStatus; label: string }[] = [
   { value: 'reading', label: 'Reading' },
@@ -54,6 +55,8 @@ function BooksView() {
   const toast = useToast();
   const navigate = useNavigate();
   const [title, setTitle] = useState('');
+  const addRef = useRef<HTMLFormElement>(null);
+  useQuickAction('Add a book', () => focusFirstFieldIn(addRef.current));
   const [author, setAuthor] = useState('');
 
   const add = () => {
@@ -99,6 +102,7 @@ function BooksView() {
       </div>
 
       <form
+        ref={addRef}
         onSubmit={(e) => {
           e.preventDefault();
           add();

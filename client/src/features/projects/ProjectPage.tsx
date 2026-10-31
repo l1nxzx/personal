@@ -259,7 +259,11 @@ function ProjectView({ project }: { project: Project }) {
                     : 'What is the first step?'}
                 </p>
               )}
-              <AddTask projectId={project.id} placeholder="Add the next step" />
+              <AddTask
+                projectId={project.id}
+                placeholder="Add the next step"
+                quickAction="Add a task to this project"
+              />
             </>
           )}
         </div>
@@ -280,7 +284,11 @@ function ProjectView({ project }: { project: Project }) {
             </h2>
             <TaskList tasks={after} showProject={false} />
             <div className="mt-1">
-              <AddTask projectId={project.id} placeholder="Add a task to this project" />
+              <AddTask
+                projectId={project.id}
+                placeholder="Add a task to this project"
+                quickAction="Add a task to this project"
+              />
             </div>
           </>
         )}

@@ -29,6 +29,7 @@ import {
   useUpdateMoneyIdea,
 } from './ideasApi';
 import { amountInput, COMMON_CURRENCIES, formatMoney, parseAmount } from './money';
+import { focusFirstFieldIn, useQuickAction } from '../../context/UIContext';
 
 const newId = () => Math.random().toString(36).slice(2, 10);
 
@@ -388,6 +389,12 @@ function ExperimentForm({
 
 function Experiments({ idea, onChange }: { idea: MoneyIdea; onChange: (e: Experiment[]) => void }) {
   const [adding, setAdding] = useState(false);
+  const formRef = useRef<HTMLDivElement>(null);
+  useQuickAction('Record an experiment', () => {
+    setAdding(true);
+    // "What did you try" (the date above it is already today).
+    focusFirstFieldIn(() => formRef.current, { selector: 'textarea' });
+  });
   const [editing, setEditing] = useState<string | null>(null);
   const prefs = usePrefs();
   const addExpense = useAddExpense();
@@ -437,7 +444,7 @@ function Experiments({ idea, onChange }: { idea: MoneyIdea; onChange: (e: Experi
       }
     >
       {adding && (
-        <div className="mb-6">
+        <div ref={formRef} className="mb-6">
           <ExperimentForm
             defaultCurrency={base}
             onSave={(x) => {

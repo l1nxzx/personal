@@ -73,6 +73,7 @@ import { Breadcrumbs, ScopeTabs, SelectionBar, Toolbar, type Scope } from './Doc
 import { MoveDialog, type MoveTarget } from './MoveDialog';
 import { NameDialog } from './NameDialog';
 import { MAX_UPLOAD_BYTES, UploadPanel, useUploadQueue } from './UploadQueue';
+import { useQuickAction } from '../../context/UIContext';
 
 type Naming =
   | { kind: 'newFolder'; parentId: string | null }
@@ -599,6 +600,7 @@ export function DocumentsView() {
     .join(' · ');
   const newFolder = () => setNaming({ kind: 'newFolder', parentId: here });
   const pickFiles = () => fileInput.current?.click();
+  useQuickAction('Upload files', pickFiles);
   const quiet = 'text-accent hover:underline';
 
   return (
