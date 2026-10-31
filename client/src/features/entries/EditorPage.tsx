@@ -103,7 +103,7 @@ function ExistingEntry({ kind, id }: { kind: EntryKind; id: string }) {
         <div className="mx-auto flex h-14 max-w-[52rem] items-center px-2 sm:px-4">
           <Link
             to={LIST_PATH[kind]}
-            className="flex h-10 items-center gap-1 rounded pl-1 pr-2 text-sm text-ink-muted hover:bg-surface-2 hover:text-ink sm:h-8"
+            className="flex h-10 items-center gap-1 rounded pl-1 pr-2 text-sm text-ink-muted hover:bg-surface-2 active:bg-surface-2/60 hover:text-ink sm:h-8"
           >
             <ChevronLeft className="h-5 w-5 sm:h-4 sm:w-4" /> {SECTION_LABEL[kind]}
           </Link>
@@ -480,7 +480,7 @@ function Editor({
             <button
               type="button"
               onClick={goBack}
-              className="flex h-10 items-center gap-1 rounded pl-1 pr-2 text-sm text-ink-muted hover:bg-surface-2 hover:text-ink sm:h-8"
+              className="flex h-10 items-center gap-1 rounded pl-1 pr-2 text-sm text-ink-muted hover:bg-surface-2 active:bg-surface-2/60 hover:text-ink sm:h-8"
             >
               <ChevronLeft className="h-5 w-5 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">{label}</span>

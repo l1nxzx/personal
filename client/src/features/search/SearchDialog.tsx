@@ -234,7 +234,7 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
           type="button"
           onClick={onClose}
           aria-label="Close search"
-          className="flex h-10 w-10 items-center justify-center rounded text-ink-faint hover:bg-surface-2 hover:text-ink sm:h-8 sm:w-8"
+          className="touch-target flex h-10 w-10 items-center justify-center rounded text-ink-faint hover:bg-surface-2 active:bg-surface-2/60 hover:text-ink sm:h-8 sm:w-8"
         >
           <X className="h-4 w-4" />
         </button>

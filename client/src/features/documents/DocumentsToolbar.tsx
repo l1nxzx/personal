@@ -245,7 +245,7 @@ export function Breadcrumbs({
               {...p}
               type="button"
               aria-current="page"
-              className="inline-flex h-9 min-w-0 max-w-[16rem] shrink items-center gap-1 rounded px-2 font-serif text-[1.0625rem] font-medium text-ink hover:bg-surface-2 sm:h-8"
+              className="inline-flex h-9 min-w-0 max-w-[16rem] shrink items-center gap-1 rounded px-2 font-serif text-[1.0625rem] font-medium text-ink hover:bg-surface-2 active:bg-surface-2/60 sm:h-8"
             >
               <span className="truncate">{current.name}</span>
               <ChevronDown className="h-4 w-4 shrink-0 text-ink-faint" />
@@ -276,7 +276,7 @@ function Crumb({
       aria-current={isLast ? 'page' : undefined}
       {...drop.props}
       className={cn(
-        'inline-flex h-9 max-w-[12rem] shrink-0 items-center rounded px-2 hover:bg-surface-2 sm:h-8',
+        'inline-flex h-9 max-w-[12rem] shrink-0 items-center rounded px-2 hover:bg-surface-2 active:bg-surface-2/60 sm:h-8',
         isLast
           ? 'font-serif text-[1.0625rem] font-medium text-ink'
           : 'text-sm text-ink-muted hover:text-ink',

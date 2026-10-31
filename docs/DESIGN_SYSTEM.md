@@ -13,9 +13,11 @@ Goal: a calm, personal notebook. It must **not** look like a generic AI-made or 
 ## Layout
 
 - Signed-in pages render inside `AppShell`: sidebar at `lg` (offset `lg:pl-[13.5rem]`), bottom `MobileNav` on phones (Home, Journal, Capture, Projects, More), hidden in editors.
-- **All pages share one content frame**: `PAGE_FRAME` in `components/shell/PageHeader.tsx` (`mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-10`). `<Page width="narrow|default|wide">` limits how far a page extends to the right but always starts at the frame's left edge. Never center a page independently or add per-page left offsets; that was the cause of horizontal jumps between sections. `html` has `scrollbar-gutter: stable` for the same reason.
+- **All pages share one content frame**: `PAGE_FRAME` in `components/shell/PageHeader.tsx` (`mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-10`). `<Page width="narrow|default|wide">` limits how far a page extends to the right but always starts at the frame's left edge. Never center a page independently or add per-page left offsets; that was the cause of horizontal jumps between sections. `html` has `scrollbar-gutter: stable` for the same reason (fine pointers only; touch screens hide scrollbars).
 - Journal/note editors (`EditorPage`) are a deliberate exception: a centered full-screen writing view.
 - Mobile is first class: 16 px gutters, large touch targets (`h-10`/`h-9` on phones, smaller from `sm`), no horizontal overflow.
+- Installed app on phones: the page background, the bottom navigation and the `theme-color` meta are the same colour (`--bg`), so Android's status bar matches; `ThemeContext` keeps the meta in step with dark/light, and overlays never change it. Fixed-height bars add the notch: `h-[calc(3.5rem+env(safe-area-inset-top))]` with `pt-safe`, or `pt-safe` on a wrapper around an `h-14` bar; bottom bars use `pb-safe`.
+- Touch (`index.css`): no browser overscroll (`overscroll-behavior: none` on `html`/`body`; inner `overflow-*-auto` areas contain theirs), `touch-action: manipulation`, and on coarse pointers controls (buttons, links, nav, ARIA controls) aren't selectable and show no callout, while `.prose-entry`, inputs and editable text stay selectable. Small icon buttons get a 44 px hit area with `.touch-target` (an invisible `::before`; `IconButton` has it). Rows, header buttons and the bottom nav show a pressed state (`active:`).
 
 ## Components (`client/src/components`)
 

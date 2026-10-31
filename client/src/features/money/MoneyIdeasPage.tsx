@@ -88,7 +88,7 @@ export default function MoneyIdeasPage() {
           <button
             type="submit"
             disabled={create.isPending}
-            className="h-9 shrink-0 rounded px-3 text-sm font-medium text-accent hover:bg-surface-2 sm:h-8"
+            className="h-9 shrink-0 rounded px-3 text-sm font-medium text-accent hover:bg-surface-2 active:bg-surface-2/60 sm:h-8"
           >
             Add
           </button>
@@ -194,7 +194,7 @@ function IdeaRow({ idea }: { idea: MoneyIdeaSummary }) {
     <div className="flex items-start gap-2">
       <Link
         to={`/money/ideas/${idea.id}`}
-        className="-mx-2 min-w-0 flex-1 rounded px-2 py-3.5 hover:bg-surface/70"
+        className="-mx-2 min-w-0 flex-1 rounded px-2 py-3.5 hover:bg-surface/70 active:bg-surface"
       >
         <h3
           className={cn(

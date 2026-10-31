@@ -145,7 +145,7 @@ export function NotePanel({
                 type="button"
                 aria-label={`Remove source ${s.label}`}
                 onClick={() => onChange({ sources: meta.sources.filter((x) => x.id !== s.id) })}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-ink-faint hover:text-ink sm:h-6 sm:w-6 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
+                className="touch-target flex h-8 w-8 shrink-0 items-center justify-center rounded text-ink-faint hover:text-ink sm:h-6 sm:w-6 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -337,7 +337,7 @@ function PositionItem({
             onToggle();
           }}
           aria-expanded={open}
-          className="-ml-1 flex min-w-0 flex-1 items-baseline gap-2 rounded px-1 py-2 text-left hover:bg-surface/70"
+          className="-ml-1 flex min-w-0 flex-1 items-baseline gap-2 rounded px-1 py-2 text-left hover:bg-surface/70 active:bg-surface"
         >
           <ChevronRight
             className={cn(
@@ -512,7 +512,7 @@ export function BeliefStand({
           <button
             type="button"
             onClick={startNew}
-            className="-my-1 inline-flex h-9 items-center gap-1 rounded px-2 text-[0.8125rem] text-ink-muted hover:bg-surface-2 hover:text-ink sm:h-7"
+            className="-my-1 inline-flex h-9 items-center gap-1 rounded px-2 text-[0.8125rem] text-ink-muted hover:bg-surface-2 active:bg-surface-2/60 hover:text-ink sm:h-7"
           >
             <Plus className="h-3.5 w-3.5" /> New position
           </button>

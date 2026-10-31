@@ -439,7 +439,7 @@ function LinkBar({ editor, href }: { editor: Editor; href: string }) {
       <button
         type="button"
         onClick={open}
-        className="inline-flex h-9 shrink-0 items-center gap-1 rounded px-2 text-ink hover:bg-surface-2 sm:h-7"
+        className="inline-flex h-9 shrink-0 items-center gap-1 rounded px-2 text-ink hover:bg-surface-2 active:bg-surface-2/60 sm:h-7"
       >
         <ExternalLink className="h-3.5 w-3.5" /> Open
       </button>
@@ -448,7 +448,7 @@ function LinkBar({ editor, href }: { editor: Editor; href: string }) {
         onClick={() =>
           editor.chain().focus().setMeta(OWN_STEP, true).extendMarkRange('link').unsetLink().run()
         }
-        className="inline-flex h-9 shrink-0 items-center gap-1 rounded px-2 text-ink hover:bg-surface-2 sm:h-7"
+        className="inline-flex h-9 shrink-0 items-center gap-1 rounded px-2 text-ink hover:bg-surface-2 active:bg-surface-2/60 sm:h-7"
       >
         <Unlink className="h-3.5 w-3.5" /> Unlink
       </button>

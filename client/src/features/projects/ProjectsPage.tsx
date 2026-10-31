@@ -185,7 +185,7 @@ function NewProject() {
         <button
           type="submit"
           disabled={create.isPending}
-          className="h-9 shrink-0 rounded px-3 text-sm font-medium text-accent hover:bg-surface-2 sm:h-8"
+          className="h-9 shrink-0 rounded px-3 text-sm font-medium text-accent hover:bg-surface-2 active:bg-surface-2/60 sm:h-8"
         >
           Create
         </button>
@@ -282,7 +282,7 @@ function QuietProject({ project: p, note }: { project: Project; note: string }) 
   return (
     <Link
       to={`/tasks/projects/${p.id}`}
-      className="-mx-2 block rounded px-2 py-2.5 hover:bg-surface/70"
+      className="-mx-2 block rounded px-2 py-2.5 hover:bg-surface/70 active:bg-surface"
     >
       <div className="flex items-baseline gap-3">
         <span className="min-w-0 flex-1 truncate font-serif text-[1.0625rem] text-ink-muted">

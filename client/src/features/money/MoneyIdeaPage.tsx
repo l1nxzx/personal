@@ -38,11 +38,11 @@ export default function MoneyIdeaPage() {
   const navigate = useNavigate();
   return (
     <Page width="narrow">
-      <div className="pt-safe flex h-14 items-center lg:mt-4">
+      <div className="pt-safe flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center lg:mt-4">
         <button
           type="button"
           onClick={() => navigate('/money/ideas')}
-          className="-ml-2 flex h-10 items-center gap-1 rounded pl-1 pr-2 text-sm text-ink-muted hover:bg-surface-2 hover:text-ink sm:h-8"
+          className="-ml-2 flex h-10 items-center gap-1 rounded pl-1 pr-2 text-sm text-ink-muted hover:bg-surface-2 active:bg-surface-2/60 hover:text-ink sm:h-8"
         >
           <ChevronLeft className="h-5 w-5 sm:h-4 sm:w-4" /> Money ideas
         </button>
@@ -429,7 +429,7 @@ function Experiments({ idea, onChange }: { idea: MoneyIdea; onChange: (e: Experi
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="-my-1 inline-flex h-9 items-center gap-1 rounded px-2 text-[0.8125rem] text-ink-muted hover:bg-surface-2 hover:text-ink sm:h-7"
+            className="-my-1 inline-flex h-9 items-center gap-1 rounded px-2 text-[0.8125rem] text-ink-muted hover:bg-surface-2 active:bg-surface-2/60 hover:text-ink sm:h-7"
           >
             <Plus className="h-3.5 w-3.5" /> Record
           </button>
@@ -478,7 +478,7 @@ function Experiments({ idea, onChange }: { idea: MoneyIdea; onChange: (e: Experi
                   <button
                     type="button"
                     onClick={() => setEditing(x.id)}
-                    className="h-8 rounded px-2 text-ink-faint hover:bg-surface-2 hover:text-ink sm:h-6"
+                    className="h-8 rounded px-2 text-ink-faint hover:bg-surface-2 active:bg-surface-2/60 hover:text-ink sm:h-6"
                   >
                     Edit
                   </button>

@@ -75,7 +75,7 @@ export function FilterSearch({
           type="button"
           aria-label="Clear search"
           onClick={() => onChange('')}
-          className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded text-ink-faint hover:text-ink sm:h-7 sm:w-7"
+          className="touch-target absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded text-ink-faint hover:text-ink sm:h-7 sm:w-7"
         >
           <X className="h-3.5 w-3.5" />
         </button>

@@ -5,12 +5,13 @@ import { Loading } from './components/ui/misc';
 import { useAuth } from './context/AuthContext';
 import { EditorPage, preloadRichEditor } from './features/entries/EditorPage';
 import HomePage from './features/home/HomePage';
+import JournalPage from './features/entries/JournalPage';
 import TasksPage from './features/tasks/TasksPage';
 import LoginPage from './pages/LoginPage';
 
-// Less frequent pages load on demand, and are fetched in the background once the app is up.
+// The bottom navigation's pages (Home, Journal, Tasks) and the editor are in the main bundle.
+// Every other page loads on demand, and is fetched in the background once the app is idle.
 const pages = {
-  JournalPage: () => import('./features/entries/JournalPage'),
   WritingPage: () => import('./features/entries/WritingPage'),
   ThinkingPage: () => import('./features/entries/ThinkingPage'),
   IdeasPage: () => import('./features/entries/IdeasPage'),
@@ -35,7 +36,6 @@ const preloadPages = () => {
   preloadRichEditor();
 };
 
-const JournalPage = lazy(pages.JournalPage);
 const WritingPage = lazy(pages.WritingPage);
 const ThinkingPage = lazy(pages.ThinkingPage);
 const IdeasPage = lazy(pages.IdeasPage);

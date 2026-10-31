@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAutosize } from '../../hooks/useAutosize';
+import { useHoldWork } from '../../lib/busy';
 import { cn } from '../../lib/cn';
 
 /**
@@ -23,6 +24,7 @@ export function AutoSaveText({
 }) {
   const [text, setText] = useState(value);
   const [state, setState] = useState<'idle' | 'editing' | 'saved'>('idle');
+  useHoldWork(state === 'editing');
   const ref = useRef<HTMLTextAreaElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const latest = useRef({ text, value, onSave });

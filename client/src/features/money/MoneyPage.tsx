@@ -495,7 +495,7 @@ function History({ onEdit }: { onEdit: (id: string) => void }) {
                   <button
                     type="button"
                     onClick={() => onEdit(e.id)}
-                    className="-mx-2 flex w-[calc(100%+1rem)] items-baseline gap-3 rounded px-2 py-2.5 text-left hover:bg-surface/70"
+                    className="-mx-2 flex w-[calc(100%+1rem)] items-baseline gap-3 rounded px-2 py-2.5 text-left hover:bg-surface/70 active:bg-surface"
                   >
                     <span className="w-16 shrink-0 text-2xs text-ink-faint">
                       {formatRelativeDay(e.date)}

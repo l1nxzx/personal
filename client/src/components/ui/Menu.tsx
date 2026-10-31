@@ -114,7 +114,7 @@ function MenuItems({ items, onPick }: { items: MenuItem[]; onPick: () => void })
       }}
       className={cn(
         'flex h-10 w-full items-center gap-2.5 px-3 text-left text-sm outline-none sm:h-8',
-        'hover:bg-surface-2 focus-visible:bg-surface-2 disabled:opacity-40',
+        'hover:bg-surface-2 active:bg-surface-2/60 focus-visible:bg-surface-2 disabled:opacity-40',
         item.danger ? 'text-bad' : 'text-ink',
       )}
     >

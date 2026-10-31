@@ -26,11 +26,11 @@ export default function BookPage() {
   const navigate = useNavigate();
   return (
     <Page width="narrow">
-      <div className="pt-safe flex h-14 items-center lg:mt-4">
+      <div className="pt-safe flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center lg:mt-4">
         <button
           type="button"
           onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/library'))}
-          className="-ml-2 flex h-10 items-center gap-1 rounded pl-1 pr-2 text-sm text-ink-muted hover:bg-surface-2 hover:text-ink sm:h-8"
+          className="-ml-2 flex h-10 items-center gap-1 rounded pl-1 pr-2 text-sm text-ink-muted hover:bg-surface-2 active:bg-surface-2/60 hover:text-ink sm:h-8"
         >
           <ChevronLeft className="h-5 w-5 sm:h-4 sm:w-4" /> Library
         </button>
@@ -199,7 +199,7 @@ function BookView({ book }: { book: Book }) {
               aria-checked={book.rating === n}
               aria-label={`${n} of 5`}
               onClick={() => save({ rating: book.rating === n ? null : n })}
-              className="flex h-9 w-9 items-center justify-center rounded hover:bg-surface-2 sm:h-7 sm:w-7"
+              className="touch-target flex h-9 w-9 items-center justify-center rounded hover:bg-surface-2 active:bg-surface-2/60 sm:h-7 sm:w-7"
             >
               <span
                 className={cn(
@@ -314,7 +314,7 @@ function Quotes({ book, onChange }: { book: Book; onChange: (q: Quote[]) => void
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="-my-1 inline-flex h-9 items-center gap-1 rounded px-2 text-[0.8125rem] text-ink-muted hover:bg-surface-2 hover:text-ink sm:h-7"
+            className="-my-1 inline-flex h-9 items-center gap-1 rounded px-2 text-[0.8125rem] text-ink-muted hover:bg-surface-2 active:bg-surface-2/60 hover:text-ink sm:h-7"
           >
             <Plus className="h-3.5 w-3.5" /> Add
           </button>
@@ -372,7 +372,7 @@ function Quotes({ book, onChange }: { book: Book; onChange: (q: Quote[]) => void
                         onError: (err) => toast({ message: errorMessage(err), tone: 'error' }),
                       })
                     }
-                    className="inline-flex h-8 items-center gap-1 rounded px-2 hover:bg-surface-2 hover:text-ink sm:h-6"
+                    className="inline-flex h-8 items-center gap-1 rounded px-2 hover:bg-surface-2 active:bg-surface-2/60 hover:text-ink sm:h-6"
                   >
                     <Lightbulb className="h-3 w-3" /> Save to Ideas
                   </button>

@@ -64,7 +64,7 @@ export function AddTask({
       />
       <label
         className={cn(
-          'relative flex h-9 shrink-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded px-2 text-2xs transition-colors hover:bg-surface-2 sm:h-8',
+          'relative flex h-9 shrink-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded px-2 text-2xs transition-colors hover:bg-surface-2 active:bg-surface-2/60 sm:h-8',
           due ? 'text-ink-muted' : 'text-ink-faint',
         )}
         title="Due date (optional)"
@@ -85,7 +85,7 @@ export function AddTask({
         <button
           type="submit"
           disabled={create.isPending}
-          className="h-9 shrink-0 rounded px-3 text-sm font-medium text-accent hover:bg-surface-2 sm:h-8"
+          className="h-9 shrink-0 rounded px-3 text-sm font-medium text-accent hover:bg-surface-2 active:bg-surface-2/60 sm:h-8"
         >
           Add
         </button>

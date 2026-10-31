@@ -133,7 +133,7 @@ export function FormatBar({
             className={cn(
               'flex h-10 w-10 shrink-0 items-center justify-center rounded transition-colors sm:h-8 sm:w-8 [&>svg]:h-4 [&>svg]:w-4',
               history[a]
-                ? 'text-ink-muted hover:bg-surface-2 hover:text-ink'
+                ? 'text-ink-muted hover:bg-surface-2 active:bg-surface-2/60 hover:text-ink'
                 : 'cursor-default text-ink-muted opacity-40',
             )}
           >
@@ -158,7 +158,7 @@ export function FormatBar({
               'flex h-10 w-10 shrink-0 items-center justify-center rounded transition-colors sm:h-8 sm:w-8 [&>svg]:h-4 [&>svg]:w-4',
               on
                 ? 'bg-accent/15 text-accent ring-1 ring-inset ring-accent/40'
-                : 'text-ink-muted hover:bg-surface-2 hover:text-ink',
+                : 'text-ink-muted hover:bg-surface-2 active:bg-surface-2/60 hover:text-ink',
             )}
           >
             {b.icon}

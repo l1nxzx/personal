@@ -34,11 +34,11 @@ export default function ProjectPage() {
 
   return (
     <Page width="narrow">
-      <div className="pt-safe flex h-14 items-center lg:mt-4">
+      <div className="pt-safe flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center lg:mt-4">
         <button
           type="button"
           onClick={() => navigate('/tasks/projects')}
-          className="-ml-2 flex h-10 items-center gap-1 rounded pl-1 pr-2 text-sm text-ink-muted hover:bg-surface-2 hover:text-ink sm:h-8"
+          className="-ml-2 flex h-10 items-center gap-1 rounded pl-1 pr-2 text-sm text-ink-muted hover:bg-surface-2 active:bg-surface-2/60 hover:text-ink sm:h-8"
         >
           <ChevronLeft className="h-5 w-5 sm:h-4 sm:w-4" /> Projects
         </button>

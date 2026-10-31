@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useHoldWork } from '../../lib/busy';
 import { cn } from '../../lib/cn';
 import { IconButton } from './Button';
 
@@ -9,7 +10,7 @@ type Placement = 'top' | 'center' | 'panel';
 
 const placements: Record<Placement, string> = {
   // Anchored near the top on phones so the on-screen keyboard never covers it.
-  top: 'inset-x-2 top-[calc(env(safe-area-inset-top)+0.5rem)] max-h-[calc(100dvh-1rem)] sm:inset-x-auto sm:left-1/2 sm:top-[12vh] sm:w-[36rem] sm:-translate-x-1/2',
+  top: 'inset-x-2 top-[calc(env(safe-area-inset-top)+0.5rem)] max-h-[calc(100dvh-1rem-env(safe-area-inset-top))] sm:inset-x-auto sm:left-1/2 sm:top-[12vh] sm:w-[36rem] sm:-translate-x-1/2',
   center:
     'inset-x-4 top-1/2 -translate-y-1/2 sm:inset-x-auto sm:left-1/2 sm:w-[26rem] sm:-translate-x-1/2',
   // Full screen on phones, a side panel on larger screens.
@@ -45,6 +46,8 @@ export function Dialog({
   const panelRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  // An open dialog is often a form; pull to refresh and updates wait until it closes.
+  useHoldWork(open);
 
   useEffect(() => {
     if (!open) return;

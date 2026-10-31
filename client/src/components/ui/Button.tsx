@@ -64,7 +64,7 @@ interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   active?: boolean;
 }
 
-/** Square icon button with an accessible label; 40px on touch screens. */
+/** Square icon button with an accessible label; 40px on touch screens, with a 44px hit area. */
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
   { label, active, className, children, type = 'button', ...props },
   ref,
@@ -76,7 +76,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       aria-label={label}
       title={label}
       className={cn(
-        'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded text-ink-muted transition-colors sm:h-8 sm:w-8',
+        'touch-target inline-flex h-10 w-10 shrink-0 items-center justify-center rounded text-ink-muted transition-colors sm:h-8 sm:w-8',
         'hover:bg-surface-2 hover:text-ink active:bg-surface-2/60 disabled:opacity-40',
         active && 'bg-surface-2 text-ink',
         className,

@@ -1,4 +1,4 @@
-import { QueryClientProvider } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
@@ -9,12 +9,16 @@ import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
 import { UIProvider } from './context/UIContext';
 import { VaultProvider } from './features/vault/VaultContext';
+import { initAppUpdate } from './lib/appUpdate';
 import { queryClient } from './lib/queryClient';
+import { persistOptions } from './lib/queryPersist';
 import './index.css';
+
+initAppUpdate();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
       <ThemeProvider>
         <BrowserRouter>
           <ToastProvider>
@@ -30,6 +34,6 @@ createRoot(document.getElementById('root')!).render(
           </ToastProvider>
         </BrowserRouter>
       </ThemeProvider>
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   </StrictMode>,
 );
