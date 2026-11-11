@@ -202,12 +202,12 @@ export const entryHref = (kind: EntryKind, id: string) => `/${kind}/${id}`;
  * An encrypted entry's state on this device: a closed lock while it is locked, an open lock
  * (in amber) while the PIN has opened it and anyone holding the device could read it.
  */
-export function useEncryptedState() {
-  return useEntryLock().status === 'unlocked' ? 'open' : 'locked';
+export function useEncryptedState(id: string) {
+  return useEntryLock().isOpen(id) ? 'open' : 'locked';
 }
 
-export function EncryptedMark({ className }: { className?: string }) {
-  const state = useEncryptedState();
+export function EncryptedMark({ id, className }: { id: string; className?: string }) {
+  const state = useEncryptedState(id);
   const Icon = state === 'open' ? LockOpen : Lock;
   return (
     <Icon

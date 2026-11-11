@@ -49,7 +49,16 @@ interface EntryLockValue {
    * Opens the PIN dialog if needed; resolves true once unlocked, false if cancelled.
    * `confirm`: ask for the PIN even if already unlocked (removing encryption, for instance).
    */
-  requestUnlock: (opts?: { confirm?: boolean; upgrade?: boolean }) => Promise<boolean>;
+  requestUnlock: (opts: {
+    /** The entry to open (its id, or 'new'): the PIN opens that one entry only. */
+    scope: string;
+    confirm?: boolean;
+    upgrade?: boolean;
+  }) => Promise<boolean>;
+  /** Whether the PIN has opened this entry (id or 'new') since the last lock. */
+  isOpen: (scope: string) => boolean;
+  /** A new entry got its id: it stays open under it. */
+  rescope: (from: string, to: string) => void;
   /** Entries still sealed with the vault key; opening them needs the passphrase once. */
   legacyLeft: number;
   /** Hides every locked entry at once; open editors still save, encrypted, in the background. */
@@ -96,6 +105,18 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
 
   const keyRef = useRef<CryptoKey | null>(null);
   const keyIdRef = useRef<string | null>(null);
+  /**
+   * The entries the PIN has opened since the last lock. Each stays open (also after leaving it)
+   * until the next lock; every other encrypted entry needs the PIN first, so a phone taken with
+   * entries open gives access to those only.
+   */
+  const [openSet, setOpenSet] = useState<ReadonlySet<string>>(() => new Set());
+  const openSetRef = useRef<ReadonlySet<string>>(new Set());
+  const setOpen = (next: ReadonlySet<string>) => {
+    openSetRef.current = next;
+    setOpenSet(next);
+  };
+  const pendingScope = useRef<string | null>(null);
   /** The key while open editors finish saving after a lock; it can only encrypt, not open. */
   const closingKeyRef = useRef<CryptoKey | null>(null);
   const [lockedByHand, setLockedByHand] = useState(false);
@@ -129,6 +150,8 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
   const lockWith = useCallback((byHand: boolean) => {
     const key = keyRef.current;
     keyRef.current = null;
+    openSetRef.current = new Set();
+    setOpenSet(openSetRef.current);
     setUnlocked(false);
     setLegacyLeft(0);
     setLockedByHand(byHand);
@@ -196,17 +219,35 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
     list.forEach((w) => w(ok));
   }, []);
 
-  const requestUnlock = useCallback((opts?: { confirm?: boolean; upgrade?: boolean }) => {
-    if (keyRef.current && !opts?.confirm && !opts?.upgrade) return Promise.resolve(true);
-    setDialogMode(opts?.upgrade ? 'upgrade' : 'auto');
-    setDialogOpen(true);
-    return new Promise<boolean>((resolve) => waiters.current.push(resolve));
+  const requestUnlock = useCallback(
+    (opts: { scope: string; confirm?: boolean; upgrade?: boolean }) => {
+      if (keyRef.current && openSetRef.current.has(opts.scope) && !opts.confirm && !opts.upgrade)
+        return Promise.resolve(true);
+      pendingScope.current = opts.scope;
+      setDialogMode(opts.upgrade ? 'upgrade' : 'auto');
+      setDialogOpen(true);
+      return new Promise<boolean>((resolve) => waiters.current.push(resolve));
+    },
+    [],
+  );
+
+  const isOpen = useCallback(
+    (scope: string) => unlocked && openSet.has(scope),
+    [unlocked, openSet],
+  );
+  const rescope = useCallback((from: string, to: string) => {
+    if (!openSetRef.current.has(from)) return;
+    const next = new Set(openSetRef.current);
+    next.delete(from);
+    next.add(to);
+    setOpen(next);
   }, []);
 
   const accept = useCallback(
     (key: CryptoKey, keyId: string) => {
       keyRef.current = key;
       keyIdRef.current = keyId;
+      if (pendingScope.current) setOpen(new Set([...openSetRef.current, pendingScope.current]));
       lastActive.current = Date.now();
       setLockedByHand(false);
       setUnlocked(true);
@@ -248,8 +289,10 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
       },
       registerFlush,
       legacyLeft,
+      isOpen,
+      rescope,
     }),
-    [status, requestUnlock, lock, lockedByHand, registerFlush, legacyLeft],
+    [status, requestUnlock, lock, lockedByHand, registerFlush, legacyLeft, isOpen, rescope],
   );
 
   return (

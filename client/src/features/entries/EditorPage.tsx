@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { Entry, EntryKind, NoteMeta, NoteType, Perspective } from '../../../../shared/types';
 import { Button, IconButton } from '../../components/ui/Button';
 import { Dialog } from '../../components/ui/Dialog';
@@ -87,15 +87,28 @@ export interface NewEntrySeed {
 export function EditorPage({ kind }: { kind: EntryKind }) {
   const { id = 'new' } = useParams();
   const location = useLocation();
-  const lock = useEntryLock();
-  if (id === 'new') {
-    const seed = (location.state as NewEntrySeed | null) ?? undefined;
-    // A new locked entry needs the key before the first word is typed.
-    if (seed?.locked && kind !== 'note' && lock.status !== 'unlocked')
-      return <LockedGate kind={kind} title={null} />;
-    return <Editor key={location.key} kind={kind} entry={null} seed={seed} />;
-  }
+  if (id === 'new') return <NewEntry key={location.key} kind={kind} />;
   return <ExistingEntry key={id} kind={kind} id={id} />;
+}
+
+function NewEntry({ kind }: { kind: EntryKind }) {
+  const location = useLocation();
+  const lock = useEntryLock();
+  const seed = (location.state as NewEntrySeed | null) ?? undefined;
+  const wantsLock = !!seed?.locked && kind !== 'note';
+  // Once saved it has an id; if it locks after that, it reopens as that entry.
+  const [createdId, setCreatedId] = useState<string | null>(null);
+  const [admitted, setAdmitted] = useState(false);
+  const openNew = lock.isOpen('new') || (!!createdId && lock.isOpen(createdId));
+  useEffect(() => {
+    if (openNew) setAdmitted(true);
+  }, [openNew]);
+  // A new encrypted entry needs the PIN before the first word is typed.
+  if (wantsLock && (!admitted || !openNew)) {
+    if (admitted && createdId) return <Navigate to={`${LIST_PATH[kind]}/${createdId}`} replace />;
+    return <LockedGate kind={kind} title={null} scope="new" />;
+  }
+  return <Editor kind={kind} entry={null} seed={seed} onCreatedId={setCreatedId} />;
 }
 
 /** Top bar with the way back, as on the editor. */
@@ -120,9 +133,12 @@ function LockedGate({
   title,
   error,
   upgrade,
+  scope,
 }: {
   kind: EntryKind;
   title: string | null;
+  /** The entry this gate opens (id, or 'new'): the PIN opens that one only. */
+  scope: string;
   error?: string;
   /** Sealed with the old key: the passphrase finishes the upgrade. */
   upgrade?: boolean;
@@ -135,8 +151,8 @@ function LockedGate({
     // hide it, and a PIN prompt popping up would only invite someone else to try.
     if (asked.current || lock.status === 'loading' || error || lock.lockedByHand) return;
     asked.current = true;
-    void lock.requestUnlock();
-  }, [lock, error]);
+    void lock.requestUnlock({ scope });
+  }, [lock, error, scope]);
   return (
     <div>
       <GateTopBar kind={kind} />
@@ -158,13 +174,17 @@ function LockedGate({
           <Button
             variant="primary"
             className="mt-6"
-            onClick={() => void lock.requestUnlock({ upgrade: true })}
+            onClick={() => void lock.requestUnlock({ scope, upgrade: true })}
           >
             Finish the upgrade
           </Button>
         ) : (
           !error && (
-            <Button variant="primary" className="mt-6" onClick={() => void lock.requestUnlock()}>
+            <Button
+              variant="primary"
+              className="mt-6"
+              onClick={() => void lock.requestUnlock({ scope })}
+            >
               <Lock className="h-4 w-4" /> Unlock
             </Button>
           )
@@ -179,7 +199,8 @@ function LockedEntry({ kind, entry }: { kind: EntryKind; entry: Entry }) {
   const lock = useEntryLock();
   const [opened, setOpened] = useState<{ from: Entry; entry: Entry } | null>(null);
   const [error, setError] = useState<{ text: string; upgrade: boolean } | null>(null);
-  const unlocked = lock.status === 'unlocked';
+  // Only this entry: the PIN opened it, not encrypted entries in general.
+  const unlocked = lock.isOpen(entry.id);
   useEffect(() => {
     setError(null);
     if (!unlocked) return setOpened(null);
@@ -204,7 +225,13 @@ function LockedEntry({ kind, entry }: { kind: EntryKind; entry: Entry }) {
   }, [entry, unlocked, lock]);
   if (!unlocked || error)
     return (
-      <LockedGate kind={kind} title={entry.title} error={error?.text} upgrade={error?.upgrade} />
+      <LockedGate
+        kind={kind}
+        title={entry.title}
+        scope={entry.id}
+        error={error?.text}
+        upgrade={error?.upgrade}
+      />
     );
   if (!opened) return <EditorSkeleton kind={kind} />;
   return <Editor key="locked" kind={kind} entry={opened.entry} />;
@@ -344,10 +371,12 @@ function Editor({
   kind,
   entry,
   seed,
+  onCreatedId,
 }: {
   kind: EntryKind;
   entry: Entry | null;
   seed?: NewEntrySeed;
+  onCreatedId?: (id: string) => void;
 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -383,6 +412,10 @@ function Editor({
   // Locked: the text is encrypted here before every save (an entry can be locked before it is
   // first saved, so the server never sees it, or later, which replaces every readable copy).
   const lock = useEntryLock();
+  const lockRef = useRef(lock);
+  lockRef.current = lock;
+  /** This entry's id ('new' until saved): what the PIN opens for it. */
+  const scopeRef = useRef(entry?.id ?? 'new');
   const lockable = kind !== 'note';
   const [locked, setLocked] = useState(() => entry?.locked ?? (lockable && !!seed?.locked));
   const cipher = useMemo<EntryCipher | null>(
@@ -398,8 +431,13 @@ function Editor({
     newFields,
     createExtra: () => (kind === 'note' ? pendingNoteRef.current : {}),
     // Swap /journal/new for the real URL without remounting (keeps focus and caret).
-    onCreated: (created) =>
-      window.history.replaceState(window.history.state, '', `${LIST_PATH[kind]}/${created.id}`),
+    onCreated: (created) => {
+      window.history.replaceState(window.history.state, '', `${LIST_PATH[kind]}/${created.id}`);
+      // The PIN opened "this new entry"; it stays open under its id.
+      lockRef.current.rescope('new', created.id);
+      scopeRef.current = created.id;
+      onCreatedId?.(created.id);
+    },
   });
 
   // Keep pinned/archived current (they can change from the list or another device).
@@ -420,7 +458,7 @@ function Editor({
 
   /** Lock with the PIN. Not yet saved: nothing to replace. Saved: every readable copy goes. */
   const lockEntry = async () => {
-    if (!(await lock.requestUnlock())) return;
+    if (!(await lock.requestUnlock({ scope: scopeRef.current }))) return;
     const before = await ed.settle();
     if (!before.id) {
       // Never saved: from now on it is only ever sent encrypted.
@@ -453,7 +491,7 @@ function Editor({
   /** Remove the lock: the text and its history become readable on the server again. */
   const unlockEntry = async () => {
     // Always the PIN again, even while open: someone holding an open phone can't remove it.
-    if (!(await lock.requestUnlock({ confirm: true }))) return;
+    if (!(await lock.requestUnlock({ scope: scopeRef.current, confirm: true }))) return;
     const before = await ed.settle();
     if (!before.id) {
       setLocked(false);
@@ -483,6 +521,8 @@ function Editor({
   /** The server has the entry in its new form: reopen it that way (a fresh editor). */
   const afterLockChange = (done: Entry, message: string) => {
     ed.forget(); // what's on screen is saved; nothing to write locally or send again
+    // The PIN was just entered for this entry: it reopens (encrypted) without asking again.
+    lock.rescope(scopeRef.current, done.id);
     qc.setQueryData(keys.entry(kind, done.id), done);
     void qc.invalidateQueries({ queryKey: ['entries', kind] });
     void qc.invalidateQueries({ queryKey: ['versions', kind, done.id] });
@@ -679,6 +719,11 @@ function Editor({
   const words = countWords(ed.fields.body);
   const status = statusLabel(ed.status, ed.savedAt);
   const label = SECTION_LABEL[kind];
+
+  // Encrypted, and the PIN hasn't opened this entry (locked by hand, after a while, or a new
+  // entry encrypted in place): nothing of it shows until the PIN is entered for it again.
+  if (locked && !lock.isOpen(scopeRef.current) && !lockBusy)
+    return <LockedGate kind={kind} title={ed.fields.title} scope={scopeRef.current} />;
 
   return (
     <div className={cn('min-h-dvh bg-bg', focusMode && 'fixed inset-0 z-40 overflow-y-auto')}>
