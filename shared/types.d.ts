@@ -109,6 +109,47 @@ export interface NoteSummary {
 export interface SealedBox {
   iv: string;
   data: string;
+  /**
+   * Id of the entries key that sealed it. Absent: sealed with the vault key (entries locked
+   * before the entries key existed); those are re-sealed by the migration.
+   */
+  k?: string;
+}
+
+/** The entries key, encrypted in the browser with the vault key (base64). */
+export interface EntryKeyInfo {
+  keyId: string;
+  iv: string;
+  data: string;
+  createdAt: string;
+}
+
+/** A device that can open encrypted entries with its PIN. */
+export interface PinDevice {
+  id: string;
+  label: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+export interface EnrollPinRequest {
+  deviceId: string;
+  /** Derived from the PIN on the device (with a salt only the device has); never the PIN. */
+  verifier: string;
+  keyId: string;
+  label: string;
+}
+
+export interface UnlockPinRequest {
+  deviceId: string;
+  verifier: string;
+}
+
+/** Migration: the same entry and versions, re-sealed with the entries key. */
+export interface ResealEntryRequest {
+  rev: number;
+  sealed: SealedBox;
+  versions: { id: string; sealed: SealedBox }[];
 }
 
 /** What a locked entry's (or a locked version's) sealed box holds. */

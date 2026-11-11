@@ -24,6 +24,7 @@ import {
   reviewRepo,
   statsRepo,
   vaultRepo,
+  entryLockRepo,
 } from './memory3.js';
 
 // Replace the Firebase-backed data layer so tests need no credentials or network.
@@ -45,6 +46,7 @@ vi.mock('../src/data/expenseRepo.js', () => expenseRepo);
 vi.mock('../src/data/reviewRepo.js', () => reviewRepo);
 vi.mock('../src/data/momentRepo.js', () => momentRepo);
 vi.mock('../src/data/vaultRepo.js', () => vaultRepo);
+vi.mock('../src/data/entryLockRepo.js', () => entryLockRepo);
 vi.mock('../src/data/statsRepo.js', () => statsRepo);
 vi.mock('../src/data/activityRepo.js', () => activityRepo);
 vi.mock('../src/data/storage.js', () => storage);

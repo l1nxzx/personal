@@ -72,10 +72,18 @@ export async function removeAllFor(uid: string, entryId: string): Promise<void> 
   }
 }
 
-/** Ids of an entry's versions and whether each is sealed (no text is read). */
+/** Ids of an entry's versions, whether each is sealed, and with which key (no text is read). */
 export async function sealStates(uid: string, entryId: string) {
-  const snap = await col(uid).where('entryId', '==', entryId).select('sealed').limit(1000).get();
-  return snap.docs.map((d) => ({ id: d.id, sealed: !!d.get('sealed') }));
+  const snap = await col(uid)
+    .where('entryId', '==', entryId)
+    .select('sealed.k', 'sealed.iv')
+    .limit(1000)
+    .get();
+  return snap.docs.map((d) => ({
+    id: d.id,
+    sealed: !!d.get('sealed.iv'),
+    keyId: (d.get('sealed.k') as string | undefined) ?? null,
+  }));
 }
 
 /**

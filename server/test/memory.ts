@@ -27,6 +27,7 @@ import type { IncomeRecord } from '../src/data/incomeRepo.js';
 import type { LinkRecord } from '../src/data/linkRepo.js';
 import type { ProjectRecord } from '../src/data/projectRepo.js';
 import type { TaskRecord } from '../src/data/taskRepo.js';
+import type { EntryKeyRecord, PinDeviceRecord } from '../src/data/entryLockRepo.js';
 import type { NewUser, UserPatch, UserRecord } from '../src/data/userRepo.js';
 
 const stores = {
@@ -59,6 +60,8 @@ const stores = {
   statsMeta: new Map<string, StatsMeta>(),
   activityMeta: new Map<string, ActivityMetaRecord>(),
   activityDays: new Map<string, Map<string, ActivityDayRecord>>(),
+  entryKeys: new Map<string, EntryKeyRecord>(),
+  pinDevices: new Map<string, Map<string, PinDeviceRecord>>(),
 };
 
 export function resetMemory() {
@@ -330,7 +333,7 @@ export const versionRepo = {
   async sealStates(_uid: string, entryId: string) {
     return [...stores.versions.values()]
       .filter((v) => v.entryId === entryId)
-      .map((v) => ({ id: v.id, sealed: !!v.sealed }));
+      .map((v) => ({ id: v.id, sealed: !!v.sealed, keyId: v.sealed?.k ?? null }));
   },
   async rewrite(
     _uid: string,
