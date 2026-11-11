@@ -32,6 +32,7 @@ const pages = {
   NotFoundPage: () => import('./pages/NotFoundPage'),
   MiniappsPage: () => import('./features/miniapp-host/MiniappsPage'),
   MiniappStorePage: () => import('./features/miniapp-host/StorePage'),
+  MiniappStoreAppPage: () => import('./features/miniapp-host/StoreAppPage'),
   MiniappWallpaperPage: () => import('./features/miniapp-host/WallpaperPage'),
   MiniappScreen: () => import('./features/miniapp-host/MiniappScreen'),
 };
@@ -60,6 +61,7 @@ const ProfilePage = lazy(pages.ProfilePage);
 const NotFoundPage = lazy(pages.NotFoundPage);
 const MiniappsPage = lazy(pages.MiniappsPage);
 const MiniappStorePage = lazy(pages.MiniappStorePage);
+const MiniappStoreAppPage = lazy(pages.MiniappStoreAppPage);
 const MiniappWallpaperPage = lazy(pages.MiniappWallpaperPage);
 const MiniappScreen = lazy(pages.MiniappScreen);
 
@@ -137,6 +139,7 @@ export default function App() {
 
             <Route path="miniapps" element={<MiniappsPage />} />
             <Route path="miniapps/store" element={<MiniappStorePage />} />
+            <Route path="miniapps/store/:appId" element={<MiniappStoreAppPage />} />
             <Route path="miniapps/wallpaper" element={<MiniappWallpaperPage />} />
             <Route path="miniapps/:appId" element={<MiniappScreen />} />
             <Route path="profile" element={<ProfilePage />} />

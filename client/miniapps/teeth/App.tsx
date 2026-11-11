@@ -40,20 +40,17 @@ export default function TeethApp() {
     <div className="space-y-8">
       {/* Molar and what it thinks */}
       <div className="flex items-center gap-4">
-        <Molar mood={mood} className="h-28 w-28 shrink-0" />
-        <div
+        <Molar mood={mood} className="h-24 w-24 shrink-0" />
+        <p
           className={cn(
-            'relative rounded-lg border px-4 py-3 text-[0.9375rem] leading-6',
-            mood === 'angry' || mood === 'furious'
-              ? 'border-bad/40 bg-bad/10 text-ink'
-              : mood === 'happy'
-                ? 'border-ok/40 bg-ok/10 text-ink'
-                : 'border-line bg-surface text-ink',
+            'font-serif text-[1.1875rem] leading-snug',
+            mood === 'angry' || mood === 'furious' ? 'text-bad' : 'text-ink',
           )}
+          style={{ fontVariationSettings: "'opsz' 24" }}
           data-testid="molar-line"
         >
           {line}
-        </div>
+        </p>
       </div>
 
       {/* Today */}
@@ -68,18 +65,18 @@ export default function TeethApp() {
                 onClick={() => (done ? undefined : log(today, slot))}
                 aria-pressed={!!done}
                 className={cn(
-                  'flex h-28 w-full flex-col items-center justify-center gap-1.5 rounded-lg border-2 transition-colors',
+                  'flex h-24 w-full flex-col items-center justify-center gap-1 rounded-md border transition-colors',
                   done
-                    ? 'border-[#3fb39a] bg-[#3fb39a]/15 text-ink'
+                    ? 'border-ok/50 bg-ok/10 text-ink'
                     : slot === slotNow
-                      ? 'border-accent bg-surface text-ink active:bg-surface-2'
+                      ? 'border-accent/70 bg-surface text-ink active:bg-surface-2'
                       : 'border-line bg-surface text-ink-muted active:bg-surface-2',
                 )}
               >
                 {done ? (
-                  <Check className="h-7 w-7 text-[#3fb39a]" strokeWidth={2.5} />
+                  <Check className="h-6 w-6 text-ok" strokeWidth={2.25} />
                 ) : (
-                  <Icon className="h-7 w-7" strokeWidth={1.75} />
+                  <Icon className="h-6 w-6" strokeWidth={1.75} />
                 )}
                 <span className="font-medium">{label}</span>
                 <span className="text-2xs text-ink-faint">
@@ -119,7 +116,7 @@ export default function TeethApp() {
       )}
 
       {/* Numbers */}
-      <div className="grid grid-cols-3 gap-3 text-center">
+      <div className="grid grid-cols-3 divide-x divide-line border-y border-line py-3 text-center">
         <Number value={s.streak} label="day streak" flame={s.streak > 0} />
         <Number value={s.best} label="best streak" />
         <Number value={s.total} label="brushes" />
@@ -136,9 +133,9 @@ export default function TeethApp() {
 
 function Number({ value, label, flame }: { value: number; label: string; flame?: boolean }) {
   return (
-    <div className="rounded-lg border border-line bg-surface px-2 py-3">
-      <div className="flex items-center justify-center gap-1 font-serif text-[1.75rem] leading-none text-ink">
-        {flame && <Flame className="h-5 w-5 text-[#f0954a]" strokeWidth={2} aria-hidden />}
+    <div className="px-2">
+      <div className="flex items-center justify-center gap-1 font-serif text-[1.625rem] leading-none text-ink">
+        {flame && <Flame className="h-4 w-4 text-warn" strokeWidth={2} aria-hidden />}
         {value}
       </div>
       <div className="mt-1 text-2xs text-ink-faint">{label}</div>
@@ -163,7 +160,7 @@ function History({ data, today }: { data: BrushData; today: string }) {
                 key={slot}
                 className={cn(
                   'h-4 w-full max-w-[1.25rem] rounded-sm',
-                  v?.[slot] ? 'bg-[#3fb39a]' : 'bg-ink/10',
+                  v?.[slot] ? 'bg-ok/80' : 'bg-ink/10',
                   d === today && 'ring-1 ring-accent',
                 )}
               />

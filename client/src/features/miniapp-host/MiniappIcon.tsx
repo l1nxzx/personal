@@ -1,38 +1,38 @@
-import type { Glyph } from './sdk/types';
 import { cn } from '../../lib/cn';
+import type { Glyph } from './sdk/types';
 
-/** A phone-style app icon: a rounded square with a glyph. */
+/** An app icon: a flat rounded square in one colour, with a line glyph. */
 export function MiniappIcon({
   glyph: GlyphIcon,
   background,
-  color = '#fff',
+  color = '#f2f4f7',
   size = 'md',
   className,
 }: {
   glyph: Glyph;
   background: string;
   color?: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   className?: string;
 }) {
-  const box =
-    size === 'sm'
-      ? 'h-9 w-9 rounded-[10px]'
-      : size === 'lg'
-        ? 'h-16 w-16 rounded-[18px]'
-        : 'h-[3.75rem] w-[3.75rem] rounded-[17px]';
-  const glyphSize = size === 'sm' ? 'h-5 w-5' : size === 'lg' ? 'h-8 w-8' : 'h-7 w-7';
+  const box = {
+    xs: 'h-5 w-5 rounded-[5px]',
+    sm: 'h-9 w-9 rounded-[9px]',
+    md: 'h-14 w-14 rounded-[14px]',
+    lg: 'h-[4.5rem] w-[4.5rem] rounded-[18px]',
+  }[size];
+  const glyphSize = { xs: 'h-3 w-3', sm: 'h-5 w-5', md: 'h-7 w-7', lg: 'h-9 w-9' }[size];
   return (
     <span
       aria-hidden
       className={cn(
-        'flex shrink-0 items-center justify-center shadow-[0_2px_8px_rgb(0_0_0/0.25),inset_0_1px_0_rgb(255_255_255/0.18)]',
+        'flex shrink-0 items-center justify-center ring-1 ring-inset ring-black/10',
         box,
         className,
       )}
       style={{ background, color }}
     >
-      <GlyphIcon className={glyphSize} strokeWidth={1.9} />
+      <GlyphIcon className={glyphSize} strokeWidth={1.75} />
     </span>
   );
 }

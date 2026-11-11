@@ -17,7 +17,7 @@ import { processImage } from './imageService.js';
  * knows which apps exist; an app id is just a name. Data is opaque JSON, at most MAX_JSON.
  */
 export const MAX_JSON = 300_000;
-const DEFAULT_WALLPAPER: MiniappWallpaper = { kind: 'template', id: 'night' };
+const DEFAULT_WALLPAPER: MiniappWallpaper = { kind: 'template', id: 'plain' };
 const wallpaperPath = (uid: string, version: string) =>
   `users/${uid}/miniapps/wallpaper-${version}`;
 

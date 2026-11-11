@@ -17,6 +17,10 @@ change.
   The site never imports a miniapp either.
 - No server code, no new pages, no changes to `client/src`. Data, routes, the Store, icons and
   widgets come from the framework.
+- Look like the rest of the site, not like a generated app: the site's colour tokens, its type
+  (serif for big numbers and titles, sans for the rest), small radii, hairlines rather than boxes,
+  no gradients, glows or glossy effects. The icon is one solid, muted colour with a plain line
+  glyph (a lucide icon, white).
 - Keep it simple and small. Style with Tailwind classes and the site's colour tokens (`bg-surface`,
   `border-line`, `text-ink`, `text-ink-muted`, `text-ink-faint`, `text-accent`, `bg-ok/10`,
   `text-bad`…), so it works in dark and light mode. An app may have its own accent colours.
@@ -47,10 +51,11 @@ export interface WaterData {
 export default defineMiniapp<WaterData>({
   id: 'water', // = folder name
   name: 'Water', // under the icon: one or two short words
-  description: 'Count glasses of water each day.', // one sentence, for the Store
+  description: 'Count glasses of water each day.', // one sentence, under its name in the Store
+  about: ['A tap per glass.', 'Your days at a glance.'], // optional: points for its Store page
   icon: {
     glyph: Droplet, // a lucide icon, or an SVG component ({ className, strokeWidth })
-    background: 'linear-gradient(160deg, #6fc3f0 0%, #2a6fb0 100%)', // any CSS background
+    background: '#3d6a8c', // one solid, muted colour
     // color: '#fff',       // glyph colour, default white
   },
   App: lazy(() => import('./App')),

@@ -19,7 +19,7 @@ describe('miniapps', () => {
     const { agent } = await signedUpAgent();
     const state = (await agent.get('/api/miniapps').expect(200)).body.state;
     expect(state).toEqual({
-      settings: { wallpaper: { kind: 'template', id: 'night' }, order: [] },
+      settings: { wallpaper: { kind: 'template', id: 'plain' }, order: [] },
       apps: {},
     });
   });

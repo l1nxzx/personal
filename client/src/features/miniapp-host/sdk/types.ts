@@ -11,12 +11,14 @@ export interface MiniappDefinition<T = unknown> {
   id: string;
   /** Shown under the icon, in the Store and on its screen. Short (one or two words). */
   name: string;
-  /** One sentence for the Store. */
+  /** One sentence: under its name in the Store. */
   description: string;
+  /** Optional: a few short points for its Store page ("About this app"). */
+  about?: string[];
   icon: {
     /** The picture on the icon: an SVG component (a lucide icon works) drawn in `color`. */
     glyph: Glyph;
-    /** Icon background: any CSS background (a colour or a gradient). */
+    /** Icon background: one solid, muted colour (e.g. '#3f7a72'). No gradients. */
     background: string;
     /** Colour of the glyph. Default white. */
     color?: string;
