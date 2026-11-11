@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Lock } from 'lucide-react';
 import {
   createContext,
@@ -18,21 +18,28 @@ import { Field, Input } from '../../components/ui/Field';
 import { useAuth } from '../../context/AuthContext';
 import { apiFetch } from '../../lib/apiFetch';
 import {
+  deviceLabel,
   forgetPin,
   hasPin,
   isValidPin,
+  OfflineError,
+  PinGoneError,
   setUpPin,
   unlockWithPin,
+  vaultKeyFrom,
   WrongPinError,
 } from '../../lib/entryLockStore';
 import { decryptJSON, encryptJSON, WrongPassphraseError } from '../../lib/vaultCrypto';
+import { resealLegacyEntries } from './migrateEntries';
 
 /**
- * Locked journal entries and writings. Their text is encrypted in the browser with the vault
- * key before it is sent, and decrypted here after it arrives; the server only ever holds
- * ciphertext (and the title). The key is opened with a PIN on this device
- * (`lib/entryLockStore.ts`) and kept in memory only, like the vault's: it locks again after
- * 10 minutes without activity, 5 minutes in the background, on reload and on sign-out.
+ * Encrypted journal entries and writings. Their text is encrypted in the browser with the
+ * entries key before it is sent, and decrypted here after it arrives; the server only ever holds
+ * ciphertext (and the title). The entries key is opened with a PIN that the server checks
+ * (`lib/entryLockStore.ts`, docs/DECISIONS.md 28) and kept in memory only, like the vault's: it
+ * locks again after 10 minutes without activity, 5 minutes in the background, on reload and on
+ * sign-out. Entries the vault key sealed (before the entries key existed) are re-sealed once
+ * the passphrase is entered.
  */
 export type EntryLockStatus = 'loading' | 'no-vault' | 'needs-pin' | 'locked' | 'unlocked';
 
@@ -42,7 +49,9 @@ interface EntryLockValue {
    * Opens the PIN dialog if needed; resolves true once unlocked, false if cancelled.
    * `confirm`: ask for the PIN even if already unlocked (removing encryption, for instance).
    */
-  requestUnlock: (opts?: { confirm?: boolean }) => Promise<boolean>;
+  requestUnlock: (opts?: { confirm?: boolean; upgrade?: boolean }) => Promise<boolean>;
+  /** Entries still sealed with the vault key; opening them needs the passphrase once. */
+  legacyLeft: number;
   /** Hides every locked entry at once; open editors still save, encrypted, in the background. */
   lock: () => void;
   /** Locked by hand ("Lock now"): screens don't pop up the PIN dialog by themselves. */
@@ -64,9 +73,20 @@ export class LockedError extends Error {
   }
 }
 
+/** Sealed with the vault key, not yet re-sealed: needs the passphrase once. */
+export class LegacyBoxError extends Error {
+  constructor() {
+    super('This entry still uses the old key. Enter the vault passphrase to finish the upgrade.');
+    this.name = 'LegacyBoxError';
+  }
+}
+
+type DialogMode = 'auto' | 'upgrade';
+
 export function EntryLockProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const userId = user?.id ?? null;
+  const qc = useQueryClient();
   const meta = useQuery({
     queryKey: ['vault', 'meta', userId],
     queryFn: async () => (await apiFetch<{ meta: VaultMeta | null }>('/vault/meta')).meta,
@@ -75,12 +95,16 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
   });
 
   const keyRef = useRef<CryptoKey | null>(null);
+  const keyIdRef = useRef<string | null>(null);
   /** The key while open editors finish saving after a lock; it can only encrypt, not open. */
   const closingKeyRef = useRef<CryptoKey | null>(null);
   const [lockedByHand, setLockedByHand] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
   const [pinSet, setPinSet] = useState<boolean | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<DialogMode>('auto');
+  /** Entries still sealed with the vault key after this unlock (the passphrase finishes them). */
+  const [legacyLeft, setLegacyLeft] = useState(0);
   const waiters = useRef<((ok: boolean) => void)[]>([]);
 
   const vaultMeta = meta.data ?? null;
@@ -88,7 +112,7 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
     setPinSet(null);
     if (!userId || !vaultMeta) return;
     let live = true;
-    void hasPin(userId, vaultMeta).then((v) => live && setPinSet(v));
+    void hasPin(userId).then((v) => live && setPinSet(v));
     return () => {
       live = false;
     };
@@ -106,6 +130,7 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
     const key = keyRef.current;
     keyRef.current = null;
     setUnlocked(false);
+    setLegacyLeft(0);
     setLockedByHand(byHand);
     if (!key) return;
     closingKeyRef.current = key;
@@ -171,15 +196,17 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
     list.forEach((w) => w(ok));
   }, []);
 
-  const requestUnlock = useCallback((opts?: { confirm?: boolean }) => {
-    if (keyRef.current && !opts?.confirm) return Promise.resolve(true);
+  const requestUnlock = useCallback((opts?: { confirm?: boolean; upgrade?: boolean }) => {
+    if (keyRef.current && !opts?.confirm && !opts?.upgrade) return Promise.resolve(true);
+    setDialogMode(opts?.upgrade ? 'upgrade' : 'auto');
     setDialogOpen(true);
     return new Promise<boolean>((resolve) => waiters.current.push(resolve));
   }, []);
 
   const accept = useCallback(
-    (key: CryptoKey) => {
+    (key: CryptoKey, keyId: string) => {
       keyRef.current = key;
+      keyIdRef.current = keyId;
       lastActive.current = Date.now();
       setLockedByHand(false);
       setUnlocked(true);
@@ -187,6 +214,20 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
       finish(true);
     },
     [finish],
+  );
+
+  /** Entries the vault key sealed: re-sealed with the entries key, here, now. */
+  const migrate = useCallback(
+    async (vaultKey: CryptoKey, key: CryptoKey, keyId: string) => {
+      if (await resealLegacyEntries(vaultKey, key, keyId)) {
+        // Open entries and histories were read with the old boxes: read them again.
+        await qc.invalidateQueries({ queryKey: ['entry'] });
+        qc.removeQueries({ queryKey: ['version'] });
+        void qc.invalidateQueries({ queryKey: ['versions'] });
+      }
+      setLegacyLeft(0);
+    },
+    [qc],
   );
 
   const value = useMemo<EntryLockValue>(
@@ -197,16 +238,18 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
       lockedByHand,
       async seal(content) {
         const key = keyRef.current ?? closingKeyRef.current;
-        if (!key) throw new LockedError();
-        return encryptJSON(key, content);
+        if (!key || !keyIdRef.current) throw new LockedError();
+        return { ...(await encryptJSON(key, content)), k: keyIdRef.current };
       },
       async open(box) {
         if (!keyRef.current) throw new LockedError();
+        if (box.k !== keyIdRef.current) throw new LegacyBoxError();
         return decryptJSON<SealedEntryContent>(keyRef.current, box);
       },
       registerFlush,
+      legacyLeft,
     }),
-    [status, requestUnlock, lock, lockedByHand, registerFlush],
+    [status, requestUnlock, lock, lockedByHand, registerFlush, legacyLeft],
   );
 
   return (
@@ -215,14 +258,24 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
       <PinDialog
         open={dialogOpen}
         status={status}
+        mode={dialogMode}
         onCancel={() => finish(false)}
         onPin={async (pin) => {
-          if (!userId || !vaultMeta) return;
+          if (!userId) return;
           try {
-            accept(await unlockWithPin(userId, vaultMeta, pin));
+            const { key, keyId } = await unlockWithPin(userId, pin);
+            accept(key, keyId);
+            // Anything the vault key sealed (an unfinished upgrade, an old app version) waits
+            // for the passphrase.
+            void apiFetch<{ items: unknown[] }>('/entry-lock/legacy', { query: { keyId } })
+              .then((r) => setLegacyLeft(r.items.length))
+              .catch(() => {});
           } catch (err) {
-            if (err instanceof WrongPinError && err.attemptsLeft <= 0) {
-              // Too many wrong PINs, even while open: close everything, the passphrase is next.
+            if (
+              err instanceof PinGoneError ||
+              (err instanceof WrongPinError && err.attemptsLeft <= 0)
+            ) {
+              // No PIN on this device any more, even while open: close everything.
               setPinSet(false);
               autoLock();
             }
@@ -231,7 +284,21 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
         }}
         onSetUp={async (passphrase, pin) => {
           if (!userId || !vaultMeta) return;
-          accept(await setUpPin(userId, vaultMeta, passphrase, pin));
+          const { key, keyId, vaultKey } = await setUpPin(
+            userId,
+            vaultMeta,
+            passphrase,
+            pin,
+            deviceLabel(),
+          );
+          await migrate(vaultKey, key, keyId);
+          accept(key, keyId);
+        }}
+        onUpgrade={async (passphrase) => {
+          if (!vaultMeta || !keyRef.current || !keyIdRef.current) return;
+          const vaultKey = await vaultKeyFrom(passphrase, vaultMeta);
+          await migrate(vaultKey, keyRef.current, keyIdRef.current);
+          finish(true);
         }}
       />
     </EntryLockContext.Provider>
@@ -257,15 +324,19 @@ const pinInputProps = {
 function PinDialog({
   open,
   status,
+  mode,
   onCancel,
   onPin,
   onSetUp,
+  onUpgrade,
 }: {
   open: boolean;
   status: EntryLockStatus;
+  mode: DialogMode;
   onCancel: () => void;
   onPin: (pin: string) => Promise<void>;
   onSetUp: (passphrase: string, pin: string) => Promise<void>;
+  onUpgrade: (passphrase: string) => Promise<void>;
 }) {
   const [usePassphrase, setUsePassphrase] = useState(false);
   const [pin, setPin] = useState('');
@@ -285,7 +356,12 @@ function PinDialog({
     setUsePassphrase(false);
   }, [open]);
 
-  const setup = status === 'needs-pin' || usePassphrase;
+  const upgrade = mode === 'upgrade' && status === 'unlocked';
+  const [pinGone, setPinGone] = useState(false);
+  useEffect(() => {
+    if (open) setPinGone(false);
+  }, [open]);
+  const setup = !upgrade && (status === 'needs-pin' || usePassphrase || pinGone);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -294,19 +370,25 @@ function PinDialog({
     if (setup) {
       if (!isValidPin(pin)) return setError('Choose a PIN of 4 to 12 digits.');
       if (pin !== pin2) return setError('The two PINs are different.');
-    } else if (!pin) return;
+    } else if (!upgrade && !pin) return;
     setBusy(true);
     try {
-      if (setup) await onSetUp(passphrase, pin);
+      if (upgrade) await onUpgrade(passphrase);
+      else if (setup) await onSetUp(passphrase, pin);
       else await onPin(pin);
     } catch (err) {
+      if (err instanceof PinGoneError || (err instanceof WrongPinError && err.attemptsLeft <= 0))
+        setPinGone(true);
       setError(
-        err instanceof WrongPassphraseError || err instanceof WrongPinError
+        err instanceof WrongPassphraseError ||
+          err instanceof WrongPinError ||
+          err instanceof PinGoneError ||
+          err instanceof OfflineError
           ? err.message
           : 'Something went wrong. Try again.',
       );
       setPin('');
-      if (!setup) pinRef.current?.focus();
+      if (!setup && !upgrade) pinRef.current?.focus();
     } finally {
       setBusy(false);
     }
@@ -317,7 +399,7 @@ function PinDialog({
       open={open}
       onClose={onCancel}
       title="Locked entries"
-      initialFocus={setup ? passRef : pinRef}
+      initialFocus={setup || upgrade ? passRef : pinRef}
       className="sm:w-[26rem]"
     >
       <div className="overflow-y-auto p-4">
@@ -345,11 +427,32 @@ function PinDialog({
           <p className="text-sm text-ink-faint">Loading…</p>
         ) : (
           <form onSubmit={submit} className="space-y-4">
-            {setup ? (
+            {upgrade ? (
               <>
                 <p className="text-sm text-ink-muted">
-                  Enter your vault passphrase once on this device, then choose a PIN to open locked
-                  entries here. The PIN works only on this device.
+                  Some encrypted entries still use the old key. Enter your vault passphrase once to
+                  re-encrypt them with the new one.
+                </p>
+                <Field label="Vault passphrase">
+                  {(id) => (
+                    <Input
+                      ref={passRef}
+                      id={id}
+                      type="password"
+                      value={passphrase}
+                      onChange={(e) => setPassphrase(e.target.value)}
+                      autoComplete="current-password"
+                      autoFocus
+                    />
+                  )}
+                </Field>
+              </>
+            ) : setup ? (
+              <>
+                <p className="text-sm text-ink-muted">
+                  Enter your vault passphrase once on this device, then choose a PIN to open
+                  encrypted entries here. The PIN works only on this device, and only with a
+                  connection: the server checks it and allows five tries.
                 </p>
                 <Field label="Vault passphrase">
                   {(id) => (
@@ -405,7 +508,7 @@ function PinDialog({
               </p>
             )}
             <div className="flex flex-wrap items-center justify-between gap-2">
-              {!setup ? (
+              {!setup && !upgrade ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -425,7 +528,7 @@ function PinDialog({
                   Cancel
                 </Button>
                 <Button type="submit" variant="primary" busy={busy}>
-                  {busy ? 'Opening…' : setup ? 'Set PIN and unlock' : 'Unlock'}
+                  {busy ? 'Opening…' : upgrade ? 'Finish' : setup ? 'Set PIN and unlock' : 'Unlock'}
                 </Button>
               </div>
             </div>

@@ -23,7 +23,10 @@ export function createApp() {
     }),
   );
   // Locking or unlocking an entry sends its whole version history at once.
-  app.use(/^\/api\/(journal|writing)\/[^/]+\/(lock|unlock)$/, express.json({ limit: '32mb' }));
+  app.use(
+    /^\/api\/(journal|writing)\/[^/]+\/(lock|unlock|reseal)$/,
+    express.json({ limit: '32mb' }),
+  );
   app.use(express.json({ limit: '1mb' })); // long-form writing autosaves the whole body
   app.use(cookieParser());
 

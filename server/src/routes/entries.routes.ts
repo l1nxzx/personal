@@ -15,6 +15,11 @@ const MAX_BODY = 200_000;
 const sealedBox = z.object({
   iv: z.string().min(16).max(32),
   data: z.string().min(1).max(1_200_000),
+  /** The entries key that sealed it (absent: the vault key, before the entries key existed). */
+  k: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{8,64}$/)
+    .optional(),
 });
 const anchors = z.array(z.string().regex(/^(document|folder):[A-Za-z0-9_-]{1,64}$/)).max(500);
 
@@ -91,6 +96,14 @@ const lockBody = z
     rev: z.number().int().positive(),
     sealed: sealedBox,
     anchors,
+    versions: z.array(z.object({ id: z.string().min(1).max(64), sealed: sealedBox })).max(1000),
+  })
+  .strict();
+
+const resealBody = z
+  .object({
+    rev: z.number().int().positive(),
+    sealed: sealedBox,
     versions: z.array(z.object({ id: z.string().min(1).max(64), sealed: sealedBox })).max(1000),
   })
   .strict();
@@ -254,6 +267,16 @@ function entryRoutes(kind: EntryKind) {
       asyncHandler(async (req, res) => {
         res.json({
           entry: await entryService.lockEntry(ctxOf(req), kind, req.params.id!, req.body),
+        });
+      }),
+    );
+    /** Migration: re-sealed with the entries key, replacing what the vault key sealed. */
+    router.post(
+      '/:id/reseal',
+      validate({ params: idParams, body: resealBody }),
+      asyncHandler(async (req, res) => {
+        res.json({
+          entry: await entryService.resealEntry(ctxOf(req), kind, req.params.id!, req.body),
         });
       }),
     );

@@ -10,6 +10,7 @@ import type { MoneyIdeaRecord } from '../src/data/moneyIdeaRepo.js';
 import type { ReviewRecord } from '../src/data/reviewRepo.js';
 import type { ScannedDoc, StatCollection, StatsMeta } from '../src/data/statsRepo.js';
 import type { VaultItemRecord } from '../src/data/vaultRepo.js';
+import type { EntryKeyRecord, PinDeviceRecord } from '../src/data/entryLockRepo.js';
 import { bucket, byDesc, clone, newId, page, stores } from './memory.js';
 
 // ---------------------------------------------------------------- money ideas
@@ -378,3 +379,54 @@ export const activityRepo = {
 
 /** Test helper: the stored day records. */
 export const activityDays = (uid: string) => [...daysOf(uid).values()].map(clone);
+
+// ---------------------------------------------------------------- entry lock (PIN, entries key)
+const pinDevices = (uid: string) => bucket(stores.pinDevices, uid);
+
+export const entryLockRepo = {
+  async getKey(uid: string) {
+    const k = stores.entryKeys.get(uid);
+    return k ? clone(k) : null;
+  },
+  async createKey(uid: string, record: EntryKeyRecord) {
+    const existing = stores.entryKeys.get(uid);
+    if (existing) return clone(existing);
+    stores.entryKeys.set(uid, clone(record));
+    return clone(record);
+  },
+  async deleteKey(uid: string) {
+    stores.entryKeys.delete(uid);
+  },
+  async listDevices(uid: string) {
+    return [...pinDevices(uid).values()].map(clone);
+  },
+  async putDevice(uid: string, record: PinDeviceRecord) {
+    pinDevices(uid).set(record.id, clone(record));
+  },
+  async deleteDevice(uid: string, id: string) {
+    return pinDevices(uid).delete(id);
+  },
+  async deleteAllDevices(uid: string) {
+    pinDevices(uid).clear();
+  },
+  async checkPin(
+    uid: string,
+    id: string,
+    matches: (verifierHash: string) => boolean,
+    maxAttempts: number,
+  ) {
+    const d = pinDevices(uid).get(id);
+    if (!d) return { status: 'missing' as const };
+    if (matches(d.verifierHash)) {
+      d.attemptsLeft = maxAttempts;
+      d.lastUsedAt = new Date().toISOString();
+      return { status: 'ok' as const, serverHalf: d.serverHalf };
+    }
+    const attemptsLeft = d.attemptsLeft - 1;
+    if (attemptsLeft <= 0) pinDevices(uid).delete(id);
+    else d.attemptsLeft = attemptsLeft;
+    return { status: 'wrong' as const, attemptsLeft: Math.max(0, attemptsLeft) };
+  },
+  /** Test helper: the stored record, as stored. */
+  device: (uid: string, id: string) => pinDevices(uid).get(id),
+};

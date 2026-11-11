@@ -57,7 +57,7 @@ import { MomentDialog } from '../timeline/MomentDialog';
 import { BeliefStand, DecisionPanel, NotePanel } from './NoteDetails';
 import { TagInput } from './TagInput';
 import { useEntryEditor, type EntryCipher, type SaveStatus } from './useEntryEditor';
-import { useEntryLock } from './EntryLockContext';
+import { LegacyBoxError, useEntryLock } from './EntryLockContext';
 import { lockExisting, openEntry, sealFields, unlockExisting } from './locking';
 import { VersionHistory } from './VersionHistory';
 import { EntryMetadata } from './EntryMetadata';
@@ -119,10 +119,13 @@ function LockedGate({
   kind,
   title,
   error,
+  upgrade,
 }: {
   kind: EntryKind;
   title: string | null;
   error?: string;
+  /** Sealed with the old key: the passphrase finishes the upgrade. */
+  upgrade?: boolean;
 }) {
   const lock = useEntryLock();
   useHideFromStats(true);
@@ -151,10 +154,20 @@ function LockedGate({
               ? 'Its text is encrypted on this device before it is saved. Enter your PIN to start.'
               : 'Its text is encrypted. Enter your PIN to read and write it.')}
         </p>
-        {!error && (
-          <Button variant="primary" className="mt-6" onClick={() => void lock.requestUnlock()}>
-            <Lock className="h-4 w-4" /> Unlock
+        {upgrade ? (
+          <Button
+            variant="primary"
+            className="mt-6"
+            onClick={() => void lock.requestUnlock({ upgrade: true })}
+          >
+            Finish the upgrade
           </Button>
+        ) : (
+          !error && (
+            <Button variant="primary" className="mt-6" onClick={() => void lock.requestUnlock()}>
+              <Lock className="h-4 w-4" /> Unlock
+            </Button>
+          )
         )}
       </div>
     </div>
@@ -165,18 +178,24 @@ function LockedGate({
 function LockedEntry({ kind, entry }: { kind: EntryKind; entry: Entry }) {
   const lock = useEntryLock();
   const [opened, setOpened] = useState<{ from: Entry; entry: Entry } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ text: string; upgrade: boolean } | null>(null);
   const unlocked = lock.status === 'unlocked';
   useEffect(() => {
+    setError(null);
     if (!unlocked) return setOpened(null);
     let live = true;
     openEntry(lock, entry)
       .then((e) => live && setOpened({ from: entry, entry: e }))
       .catch(
-        () =>
+        (err) =>
           live &&
           setError(
-            "This entry can't be opened with this vault's key. It was locked with another one.",
+            err instanceof LegacyBoxError
+              ? { text: err.message, upgrade: true }
+              : {
+                  text: "This entry can't be opened with this key. It was encrypted with another one.",
+                  upgrade: false,
+                },
           ),
       );
     return () => {
@@ -184,7 +203,9 @@ function LockedEntry({ kind, entry }: { kind: EntryKind; entry: Entry }) {
     };
   }, [entry, unlocked, lock]);
   if (!unlocked || error)
-    return <LockedGate kind={kind} title={entry.title} error={error ?? undefined} />;
+    return (
+      <LockedGate kind={kind} title={entry.title} error={error?.text} upgrade={error?.upgrade} />
+    );
   if (!opened) return <EditorSkeleton kind={kind} />;
   return <Editor key="locked" kind={kind} entry={opened.entry} />;
 }

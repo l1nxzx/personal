@@ -1,45 +1,47 @@
 import { createStore, del, get, set } from 'idb-keyval';
-import type { VaultMeta } from '../../../shared/types';
-import {
-  deriveKek,
-  fromBase64,
-  importVaultKey,
-  random,
-  toBase64,
-  unwrapRaw,
-  type Bytes,
-} from './vaultCrypto';
+import type { EntryKeyInfo, VaultMeta } from '../../../shared/types';
+import { ApiError, apiFetch, NetworkError } from './apiFetch';
+import { fromBase64, importVaultKey, random, toBase64, unwrapRaw, type Bytes } from './vaultCrypto';
 
 /**
- * The PIN for locked entries, per device.
+ * The PIN for encrypted entries (docs/DECISIONS.md 28).
  *
- * Locked entries are encrypted with the vault key (whose strength is the vault passphrase).
- * On a device, after the passphrase has been entered once, the vault key is kept wrapped
- * twice, in IndexedDB:
- *   inner = AES-GCM(raw vault key) with a key from PBKDF2-SHA-256(PIN, 600k iterations)
- *   blob  = AES-GCM(inner) with a random, non-extractable device key (a CryptoKey that the
- *           browser stores but never hands out as bytes)
- * So the PIN only works on this device, and a copy of the database alone is no help: the
- * entries need the passphrase. Five wrong PINs in a row erase the record; the passphrase is
- * then needed again. Nothing here is ever sent to the server.
+ * Encrypted entries have their own random key (the entries key). The server stores it only
+ * encrypted with the vault key, so the vault passphrase can always recover it; the vault key
+ * itself is never kept on a device.
+ *
+ * On a device, after the passphrase has been entered once, the entries key is kept in
+ * IndexedDB inside a box that needs three things to open:
+ *   - data only this device has: the box and a random salt,
+ *   - a random "server half" that the server keeps and releases only for the right PIN,
+ *   - the PIN.
+ * From the PIN and the salt (PBKDF2-SHA-256, 600k iterations) the device derives a check value,
+ * which it sends to the server, and a wrapping part, which never leaves the device. The box is
+ * opened with HKDF(wrapping part + server half). A copy of the device's storage can't be used
+ * to try PINs offline (there's no server half in it), and the server counts wrong PINs: five,
+ * and it deletes the server half for good. The database alone opens nothing either.
  */
-export const PIN_ATTEMPTS = 5;
 const ITERATIONS = 600_000;
-const store = () => createStore('notebook-entry-lock', 'pin');
+const store = () => createStore('notebook-entry-lock-v2', 'pin');
+
+// The first version kept the vault key itself on the device behind the PIN alone. Remove it.
+try {
+  indexedDB.deleteDatabase('notebook-entry-lock');
+} catch {
+  // no IndexedDB (private mode): nothing stored either
+}
 
 interface PinRecord {
-  v: 1;
-  /** The vault this key belongs to (`VaultMeta.createdAt`); a reset vault invalidates it. */
-  vault: string;
-  deviceKey: CryptoKey;
+  v: 2;
+  deviceId: string;
+  keyId: string;
   salt: string;
-  pinIv: string;
-  deviceIv: string;
-  blob: string;
-  attemptsLeft: number;
+  iv: string;
+  box: string;
 }
 
 const keyFor = (userId: string) => `pin:${userId}`;
+const enc = new TextEncoder();
 
 export class WrongPinError extends Error {
   constructor(public readonly attemptsLeft: number) {
@@ -52,106 +54,244 @@ export class WrongPinError extends Error {
   }
 }
 
+/** The server no longer has this device's PIN (too many tries, removed, or a new key). */
+export class PinGoneError extends Error {
+  constructor() {
+    super('This device needs the vault passphrase again to set a PIN.');
+    this.name = 'PinGoneError';
+  }
+}
+
+export class OfflineError extends Error {
+  constructor() {
+    super('Opening encrypted entries needs an internet connection.');
+    this.name = 'OfflineError';
+  }
+}
+
 export const isValidPin = (pin: string) => /^\d{4,12}$/.test(pin);
+
+const randomId = (prefix: string) =>
+  `${prefix}_${Array.from(random(12), (b) => b.toString(16).padStart(2, '0')).join('')}`;
 
 async function read(userId: string): Promise<PinRecord | null> {
   try {
-    return (await get<PinRecord>(keyFor(userId), store())) ?? null;
+    const rec = await get<PinRecord>(keyFor(userId), store());
+    return rec?.v === 2 ? rec : null;
   } catch {
     return null;
   }
 }
 
-/** Whether this device has a PIN for the given vault. */
-export async function hasPin(userId: string, meta: VaultMeta): Promise<boolean> {
+/** Whether this device has a PIN for the account. */
+export async function hasPin(userId: string): Promise<boolean> {
+  return !!(await read(userId));
+}
+
+/** Forgets the PIN on this device, and on the server if it can be reached. */
+export async function forgetPin(userId: string, { remote = false } = {}): Promise<void> {
   const rec = await read(userId);
-  if (rec && rec.vault !== meta.createdAt) {
-    await forgetPin(userId);
-    return false;
-  }
-  return !!rec;
-}
-
-export async function forgetPin(userId: string): Promise<void> {
   await del(keyFor(userId), store()).catch(() => {});
+  if (remote && rec)
+    await apiFetch(`/entry-lock/devices/${rec.deviceId}`, { method: 'DELETE' }).catch(() => {});
 }
 
-/** Checks the passphrase, then keeps the vault key on this device behind `pin`. */
+export async function thisDeviceId(userId: string): Promise<string | null> {
+  return (await read(userId))?.deviceId ?? null;
+}
+
+/** Check value (sent to the server) and wrapping part (stays here), from the PIN. */
+async function fromPin(pin: string, salt: Bytes) {
+  const material = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, [
+    'deriveBits',
+  ]);
+  const bits = new Uint8Array(
+    await crypto.subtle.deriveBits(
+      { name: 'PBKDF2', hash: 'SHA-256', salt, iterations: ITERATIONS },
+      material,
+      512,
+    ),
+  );
+  return { verifier: toBase64(bits.slice(0, 32)), wrapPart: bits.slice(32) };
+}
+
+async function boxKey(wrapPart: Bytes, serverHalf: Bytes, salt: Bytes): Promise<CryptoKey> {
+  const ikm = new Uint8Array(64);
+  ikm.set(wrapPart);
+  ikm.set(serverHalf, 32);
+  const base = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveKey']);
+  ikm.fill(0);
+  return crypto.subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt, info: enc.encode('notebook entry lock v2') },
+    base,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt'],
+  );
+}
+
+/**
+ * The entries key, opened with the vault key; made (and stored encrypted) the first time.
+ * Returns its raw bytes: callers wipe them.
+ */
+async function entriesKeyRaw(vaultKey: CryptoKey): Promise<{ keyId: string; raw: Bytes }> {
+  let info = (await apiFetch<{ key: EntryKeyInfo | null }>('/entry-lock/key')).key;
+  if (!info) {
+    const raw = random(32);
+    const iv = random(12);
+    const data = new Uint8Array(
+      await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, vaultKey, raw),
+    );
+    raw.fill(0);
+    // If another device made one first, the server keeps (and returns) that one.
+    info = (
+      await apiFetch<{ key: EntryKeyInfo }>('/entry-lock/key', {
+        method: 'POST',
+        body: { keyId: randomId('ek'), iv: toBase64(iv), data: toBase64(data) },
+      })
+    ).key;
+  }
+  const raw = new Uint8Array(
+    await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: fromBase64(info.iv) },
+      vaultKey,
+      fromBase64(info.data),
+    ),
+  );
+  return { keyId: info.keyId, raw };
+}
+
+export interface OpenedKeys {
+  key: CryptoKey;
+  keyId: string;
+}
+
+/**
+ * With the vault passphrase: opens the vault key (in memory, briefly), gets the entries key,
+ * and keeps it on this device behind a new PIN. Returns the entries key and the vault key, which
+ * the caller uses only to re-seal entries the vault key sealed, then drops.
+ */
 export async function setUpPin(
   userId: string,
   meta: VaultMeta,
   passphrase: string,
   pin: string,
-): Promise<CryptoKey> {
+  label: string,
+): Promise<OpenedKeys & { vaultKey: CryptoKey }> {
   if (!isValidPin(pin)) throw new Error('The PIN must be 4 to 12 digits.');
-  const raw = await unwrapRaw(passphrase, meta);
+  const vaultRaw = await unwrapRaw(passphrase, meta);
+  const vaultKey = await importVaultKey(vaultRaw);
+  vaultRaw.fill(0);
+  const { keyId, raw } = await entriesKeyRaw(vaultKey);
   try {
+    const old = await read(userId);
+    const deviceId = old?.deviceId ?? randomId('device');
     const salt = random(16);
-    const pinIv = random(12);
-    const deviceIv = random(12);
-    const kek = await deriveKek(pin, salt, ITERATIONS);
-    const inner = new Uint8Array(
-      await crypto.subtle.encrypt({ name: 'AES-GCM', iv: pinIv }, kek, raw),
-    );
-    const deviceKey = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, [
-      'encrypt',
-      'decrypt',
-    ]);
-    const blob = new Uint8Array(
-      await crypto.subtle.encrypt({ name: 'AES-GCM', iv: deviceIv }, deviceKey, inner),
-    );
+    const { verifier, wrapPart } = await fromPin(pin, salt);
+    const { serverHalf } = await apiFetch<{ serverHalf: string }>('/entry-lock/devices', {
+      method: 'POST',
+      body: { deviceId, verifier, keyId, label },
+    });
+    const half = fromBase64(serverHalf);
+    const k = await boxKey(wrapPart, half, salt);
+    wrapPart.fill(0);
+    half.fill(0);
+    const iv = random(12);
+    const box = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k, raw));
     const rec: PinRecord = {
-      v: 1,
-      vault: meta.createdAt,
-      deviceKey,
+      v: 2,
+      deviceId,
+      keyId,
       salt: toBase64(salt),
-      pinIv: toBase64(pinIv),
-      deviceIv: toBase64(deviceIv),
-      blob: toBase64(blob),
-      attemptsLeft: PIN_ATTEMPTS,
+      iv: toBase64(iv),
+      box: toBase64(box),
     };
     await set(keyFor(userId), rec, store());
+    return { key: await importVaultKey(raw), keyId, vaultKey };
+  } finally {
+    raw.fill(0);
+  }
+}
+
+/** Only the vault key, from the passphrase (to finish re-sealing old entries). */
+export async function vaultKeyFrom(passphrase: string, meta: VaultMeta): Promise<CryptoKey> {
+  const raw = await unwrapRaw(passphrase, meta);
+  try {
     return await importVaultKey(raw);
   } finally {
     raw.fill(0);
   }
 }
 
-/** Opens the vault key with the PIN. Wrong PINs count down; at zero the record is erased. */
-export async function unlockWithPin(
-  userId: string,
-  meta: VaultMeta,
-  pin: string,
-): Promise<CryptoKey> {
+/** Opens the entries key with the PIN; the server checks it and counts wrong ones. */
+export async function unlockWithPin(userId: string, pin: string): Promise<OpenedKeys> {
   const rec = await read(userId);
-  if (!rec || rec.vault !== meta.createdAt) {
-    await forgetPin(userId);
-    throw new WrongPinError(0);
+  if (!rec) throw new PinGoneError();
+  const salt = fromBase64(rec.salt);
+  const { verifier, wrapPart } = await fromPin(pin, salt);
+  let serverHalf: string;
+  try {
+    serverHalf = (
+      await apiFetch<{ serverHalf: string }>('/entry-lock/unlock', {
+        method: 'POST',
+        body: { deviceId: rec.deviceId, verifier },
+      })
+    ).serverHalf;
+  } catch (err) {
+    wrapPart.fill(0);
+    if (err instanceof ApiError && err.code === 'WRONG_PIN') {
+      const left = (err.details as { attemptsLeft?: number } | undefined)?.attemptsLeft ?? 0;
+      if (left <= 0) await forgetPin(userId);
+      throw new WrongPinError(left);
+    }
+    if (err instanceof ApiError && err.code === 'PIN_GONE') {
+      await forgetPin(userId);
+      throw new PinGoneError();
+    }
+    if (err instanceof NetworkError) throw new OfflineError();
+    throw err;
   }
-  const inner = new Uint8Array(
+  const half = fromBase64(serverHalf);
+  const k = await boxKey(wrapPart, half, salt);
+  wrapPart.fill(0);
+  half.fill(0);
+  const raw = new Uint8Array(
     await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: fromBase64(rec.deviceIv) },
-      rec.deviceKey,
-      fromBase64(rec.blob),
+      { name: 'AES-GCM', iv: fromBase64(rec.iv) },
+      k,
+      fromBase64(rec.box),
     ),
   );
-  let raw: Bytes | null = null;
   try {
-    const kek = await deriveKek(pin, fromBase64(rec.salt), ITERATIONS);
-    raw = new Uint8Array(
-      await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromBase64(rec.pinIv) }, kek, inner),
-    );
-  } catch {
-    const attemptsLeft = rec.attemptsLeft - 1;
-    if (attemptsLeft <= 0) await forgetPin(userId);
-    else await set(keyFor(userId), { ...rec, attemptsLeft }, store());
-    throw new WrongPinError(attemptsLeft);
-  }
-  try {
-    if (rec.attemptsLeft !== PIN_ATTEMPTS)
-      await set(keyFor(userId), { ...rec, attemptsLeft: PIN_ATTEMPTS }, store());
-    return await importVaultKey(raw);
+    return { key: await importVaultKey(raw), keyId: rec.keyId };
   } finally {
     raw.fill(0);
   }
+}
+
+/** A short name for this device in the list of devices with a PIN. */
+export function deviceLabel(): string {
+  const ua = navigator.userAgent;
+  const os = /Android/.test(ua)
+    ? 'Android'
+    : /iPhone|iPad/.test(ua)
+      ? 'iPhone/iPad'
+      : /Mac OS X/.test(ua)
+        ? 'Mac'
+        : /Windows/.test(ua)
+          ? 'Windows'
+          : /Linux/.test(ua)
+            ? 'Linux'
+            : 'Device';
+  const browser = /Edg\//.test(ua)
+    ? 'Edge'
+    : /Firefox\//.test(ua)
+      ? 'Firefox'
+      : /Chrome\//.test(ua)
+        ? 'Chrome'
+        : /Safari\//.test(ua)
+          ? 'Safari'
+          : 'browser';
+  const standalone = matchMedia('(display-mode: standalone)').matches ? ' (app)' : '';
+  return `${os} · ${browser}${standalone}`;
 }

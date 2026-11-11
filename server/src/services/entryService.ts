@@ -6,6 +6,7 @@ import type {
   EntryMeta,
   EntrySummary,
   LockEntryRequest,
+  ResealEntryRequest,
   NoteType,
   Page,
   Perspective,
@@ -637,5 +638,61 @@ export async function unlockEntry(
   );
   notifyChange(ctx, kind, id);
   await syncTextLinks(ctx, { type: kind, id }, result.record.body);
+  return toEntry(kind, result.record);
+}
+
+/**
+ * Migration: an encrypted entry and its versions, re-sealed in the browser with the entries
+ * key, replace the copies sealed with the vault key. Refused if a version sealed with another
+ * key was left out. Not an edit: rev and updatedAt stay.
+ */
+export async function resealEntry(
+  ctx: Ctx,
+  kind: EntryKind,
+  id: string,
+  input: ResealEntryRequest,
+): Promise<Entry> {
+  assertLockable(kind);
+  const keyId = input.sealed.k;
+  if (!keyId || input.versions.some((v) => v.sealed.k !== keyId))
+    throw badRequest('Re-sealed text must name the entries key');
+  const current = await entries.get(ctx.userId, kind, id);
+  if (!current) throw notFound('This entry no longer exists');
+  if (!current.locked) throw new AppError(409, 'NOT_LOCKED', 'This entry is not locked');
+  if (current.rev !== input.rev) throw conflictError(kind, current);
+
+  const states = await versions.sealStates(ctx.userId, id);
+  const sent = new Map(input.versions.map((v) => [v.id, v.sealed]));
+  const stale = states.filter((s) => s.sealed && s.keyId !== keyId);
+  if (
+    stale.some((s) => !sent.has(s.id)) ||
+    input.versions.some((v) => !states.some((s) => s.id === v.id && s.sealed))
+  )
+    throw new AppError(409, 'VERSIONS_CHANGED', 'The version history changed; try again');
+  await versions.rewrite(
+    ctx.userId,
+    input.versions.map((v) => ({
+      id: v.id,
+      body: '',
+      tags: [],
+      sealed: v.sealed,
+      wordCount: 0,
+      label: null,
+    })),
+  );
+  const result = await entries.update(
+    ctx.userId,
+    kind,
+    id,
+    input.rev,
+    (c) => {
+      if (!c.locked) throw new AppError(409, 'NOT_LOCKED', 'This entry is not locked');
+      return { sealed: input.sealed };
+    },
+    false,
+  );
+  if (result.status === 'missing') throw notFound('This entry no longer exists');
+  if (result.status === 'conflict') throw conflictError(kind, result.current);
+  notifyChange(ctx, kind, id);
   return toEntry(kind, result.record);
 }

@@ -1,11 +1,16 @@
-import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
-import type { AuthResponse } from '../../../shared/types';
+import type { AuthResponse, PinDevice } from '../../../shared/types';
 import { Page, PageHeader } from '../components/shell/PageHeader';
 import { Button } from '../components/ui/Button';
 import { Field, Input } from '../components/ui/Field';
 import { Kbd, Segmented } from '../components/ui/misc';
 import { useAuth } from '../context/AuthContext';
+import { useConfirm } from '../context/ConfirmContext';
+import { useEntryLock } from '../features/entries/EntryLockContext';
+import { forgetPin, thisDeviceId } from '../lib/entryLockStore';
+import { formatAgo } from '../lib/dates';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { usePrefs, useUpdatePrefs } from '../features/me/api';
@@ -126,6 +131,13 @@ export default function SettingsPage() {
 
         <Section title="Password" description="Changing it signs you out everywhere else.">
           <PasswordForm />
+        </Section>
+
+        <Section
+          title="Encrypted entries"
+          description="Devices that can open them with a PIN. Remove one you lost or no longer use: its PIN stops working at once."
+        >
+          <PinDevices />
         </Section>
 
         <Section title="Keyboard">
@@ -270,5 +282,75 @@ function PasswordForm() {
         Change password
       </Button>
     </form>
+  );
+}
+
+function PinDevices() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const confirm = useConfirm();
+  const toast = useToast();
+  const lock = useEntryLock();
+  const [current, setCurrent] = useState<string | null>(null);
+  useEffect(() => {
+    if (user) void thisDeviceId(user.id).then(setCurrent);
+  }, [user]);
+  const devices = useQuery({
+    queryKey: ['pin-devices'],
+    queryFn: async () => (await apiFetch<{ items: PinDevice[] }>('/entry-lock/devices')).items,
+    // PINs are set elsewhere (the PIN dialog); always ask the server when this list shows.
+    staleTime: 0,
+    refetchOnMount: 'always',
+  });
+
+  const remove = async (d: PinDevice) => {
+    const self = d.id === current;
+    const ok = await confirm({
+      title: self ? 'Remove the PIN on this device?' : `Remove ${d.label}?`,
+      message: self
+        ? 'Encrypted entries close now. To open them here again, enter the vault passphrase and choose a new PIN.'
+        : 'Its PIN stops working at once. Encrypted entries can be opened there again only with the vault passphrase.',
+      confirmLabel: 'Remove',
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await apiFetch(`/entry-lock/devices/${d.id}`, { method: 'DELETE' });
+      if (self && user) {
+        await forgetPin(user.id);
+        lock.lock();
+        setCurrent(null);
+      }
+      toast({ message: 'Removed' });
+    } catch (err) {
+      toast({ message: errorMessage(err), tone: 'error' });
+    } finally {
+      void qc.invalidateQueries({ queryKey: ['pin-devices'] });
+    }
+  };
+
+  if (devices.isLoading) return <p className="text-sm text-ink-faint">Loading…</p>;
+  if (devices.isError) return <p className="text-sm text-bad">{errorMessage(devices.error)}</p>;
+  if (!devices.data?.length) return <p className="text-sm text-ink-faint">No device has a PIN.</p>;
+  return (
+    <ul className="divide-y divide-line/70 border-y border-line/70">
+      {devices.data.map((d) => (
+        <li key={d.id} className="flex items-center gap-3 py-2.5">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm text-ink">
+              {d.label}
+              {d.id === current && <span className="text-ink-faint"> · this device</span>}
+            </p>
+            <p className="text-2xs text-ink-faint">
+              PIN set {formatAgo(d.createdAt)}
+              {d.lastUsedAt && ` · last opened ${formatAgo(d.lastUsedAt)}`}
+            </p>
+          </div>
+          <Button size="sm" variant="ghost" onClick={() => void remove(d)}>
+            Remove
+          </Button>
+        </li>
+      ))}
+    </ul>
   );
 }
