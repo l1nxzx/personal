@@ -118,7 +118,7 @@ function WritingRow({ e }: { e: EntrySummary }) {
   const del = useDeleteEntry('writing');
   const confirm = useConfirm();
   const toast = useToast();
-  const encrypted = useEncryptedState();
+  const encrypted = useEncryptedState(e.id);
 
   const setFlag = (patch: { pinned?: boolean; archived?: boolean }, message: string) =>
     flags.mutate(
@@ -137,7 +137,7 @@ function WritingRow({ e }: { e: EntrySummary }) {
       >
         <div className="flex items-center gap-2">
           {e.pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-accent" aria-label="Pinned" />}
-          {e.locked && <EncryptedMark />}
+          {e.locked && <EncryptedMark id={e.id} />}
           <h3
             className={
               e.title

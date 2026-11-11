@@ -183,7 +183,7 @@ function MonthGroups({ entries, filtered }: { entries: EntrySummary[]; filtered:
 
 function JournalRow({ e }: { e: EntrySummary }) {
   const isToday = e.date === today();
-  const encrypted = useEncryptedState();
+  const encrypted = useEncryptedState(e.id);
   return (
     <Link
       to={`/journal/${e.id}`}
@@ -216,7 +216,7 @@ function JournalRow({ e }: { e: EntrySummary }) {
               )}
               style={{ fontVariationSettings: "'opsz' 20" }}
             >
-              <EncryptedMark />
+              <EncryptedMark id={e.id} />
               <span className="truncate">{e.title || 'Encrypted entry'}</span>
             </h3>
             <p className="mt-1.5 text-2xs text-ink-faint">{encryptedLabel(encrypted)}</p>

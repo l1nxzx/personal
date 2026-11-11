@@ -49,7 +49,18 @@ interface EntryLockValue {
    * Opens the PIN dialog if needed; resolves true once unlocked, false if cancelled.
    * `confirm`: ask for the PIN even if already unlocked (removing encryption, for instance).
    */
-  requestUnlock: (opts?: { confirm?: boolean; upgrade?: boolean }) => Promise<boolean>;
+  requestUnlock: (opts: {
+    /** The entry to open (its id, or 'new'): the PIN opens that one entry only. */
+    scope: string;
+    confirm?: boolean;
+    upgrade?: boolean;
+  }) => Promise<boolean>;
+  /** Whether this entry (id or 'new') is the one the PIN opened. */
+  isOpen: (scope: string) => boolean;
+  /** A new entry got its id: it stays the open one. */
+  rescope: (from: string, to: string) => void;
+  /** The open entry's screen closed: lock again (its text still saves, encrypted). */
+  release: (scope: string) => void;
   /** Entries still sealed with the vault key; opening them needs the passphrase once. */
   legacyLeft: number;
   /** Hides every locked entry at once; open editors still save, encrypted, in the background. */
@@ -96,6 +107,13 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
 
   const keyRef = useRef<CryptoKey | null>(null);
   const keyIdRef = useRef<string | null>(null);
+  /**
+   * The one entry the PIN opened. Every other encrypted entry needs the PIN again, so a phone
+   * taken with one entry open gives access to that entry only.
+   */
+  const [openFor, setOpenFor] = useState<string | null>(null);
+  const openForRef = useRef<string | null>(null);
+  const pendingScope = useRef<string | null>(null);
   /** The key while open editors finish saving after a lock; it can only encrypt, not open. */
   const closingKeyRef = useRef<CryptoKey | null>(null);
   const [lockedByHand, setLockedByHand] = useState(false);
@@ -129,6 +147,8 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
   const lockWith = useCallback((byHand: boolean) => {
     const key = keyRef.current;
     keyRef.current = null;
+    openForRef.current = null;
+    setOpenFor(null);
     setUnlocked(false);
     setLegacyLeft(0);
     setLockedByHand(byHand);
@@ -141,6 +161,12 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
   }, []);
   const lock = useCallback(() => lockWith(true), [lockWith]);
   const autoLock = useCallback(() => lockWith(false), [lockWith]);
+  const release = useCallback(
+    (scope: string) => {
+      if (keyRef.current && openForRef.current === scope) lockWith(false);
+    },
+    [lockWith],
+  );
 
   // Signing out locks, and forgets this device's PIN for the account that signed out.
   const lastUser = useRef<string | null>(null);
@@ -196,17 +222,31 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
     list.forEach((w) => w(ok));
   }, []);
 
-  const requestUnlock = useCallback((opts?: { confirm?: boolean; upgrade?: boolean }) => {
-    if (keyRef.current && !opts?.confirm && !opts?.upgrade) return Promise.resolve(true);
-    setDialogMode(opts?.upgrade ? 'upgrade' : 'auto');
-    setDialogOpen(true);
-    return new Promise<boolean>((resolve) => waiters.current.push(resolve));
+  const requestUnlock = useCallback(
+    (opts: { scope: string; confirm?: boolean; upgrade?: boolean }) => {
+      if (keyRef.current && openForRef.current === opts.scope && !opts.confirm && !opts.upgrade)
+        return Promise.resolve(true);
+      pendingScope.current = opts.scope;
+      setDialogMode(opts.upgrade ? 'upgrade' : 'auto');
+      setDialogOpen(true);
+      return new Promise<boolean>((resolve) => waiters.current.push(resolve));
+    },
+    [],
+  );
+
+  const isOpen = useCallback((scope: string) => unlocked && openFor === scope, [unlocked, openFor]);
+  const rescope = useCallback((from: string, to: string) => {
+    if (openForRef.current !== from) return;
+    openForRef.current = to;
+    setOpenFor(to);
   }, []);
 
   const accept = useCallback(
     (key: CryptoKey, keyId: string) => {
       keyRef.current = key;
       keyIdRef.current = keyId;
+      openForRef.current = pendingScope.current;
+      setOpenFor(pendingScope.current);
       lastActive.current = Date.now();
       setLockedByHand(false);
       setUnlocked(true);
@@ -248,8 +288,21 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
       },
       registerFlush,
       legacyLeft,
+      isOpen,
+      rescope,
+      release,
     }),
-    [status, requestUnlock, lock, lockedByHand, registerFlush, legacyLeft],
+    [
+      status,
+      requestUnlock,
+      lock,
+      lockedByHand,
+      registerFlush,
+      legacyLeft,
+      isOpen,
+      rescope,
+      release,
+    ],
   );
 
   return (
