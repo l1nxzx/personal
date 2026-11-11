@@ -12,7 +12,8 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["vite/client", "vite-plugin-pwa/vanillajs", "node"]
+    "types": ["vite/client", "vite-plugin-pwa/vanillajs", "node"],
+    "paths": { "@miniapp/sdk": ["./src/features/miniapp-host/sdk/index.ts"] }
   },
-  "include": ["src", "vite.config.ts", "../shared"]
+  "include": ["src", "miniapps", "vite.config.ts", "../shared"]
 }

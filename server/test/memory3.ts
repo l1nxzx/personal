@@ -11,6 +11,7 @@ import type { ReviewRecord } from '../src/data/reviewRepo.js';
 import type { ScannedDoc, StatCollection, StatsMeta } from '../src/data/statsRepo.js';
 import type { VaultItemRecord } from '../src/data/vaultRepo.js';
 import type { EntryKeyRecord, PinDeviceRecord } from '../src/data/entryLockRepo.js';
+import type { MiniappRecord } from '../src/data/miniappRepo.js';
 import { bucket, byDesc, clone, newId, page, stores } from './memory.js';
 
 // ---------------------------------------------------------------- money ideas
@@ -429,4 +430,61 @@ export const entryLockRepo = {
   },
   /** Test helper: the stored record, as stored. */
   device: (uid: string, id: string) => pinDevices(uid).get(id),
+};
+
+// ---------------------------------------------------------------- miniapps
+type MiniappStored = MiniappRecord & { hasData: boolean };
+const miniapps = (uid: string) => bucket(stores.miniapps, uid);
+
+export const miniappRepo = {
+  async getSettings(uid: string) {
+    return clone(stores.miniappSettings.get(uid) ?? {});
+  },
+  async setSettings(uid: string, patch: object) {
+    stores.miniappSettings.set(uid, {
+      ...(stores.miniappSettings.get(uid) ?? {}),
+      ...clone(patch),
+    });
+  },
+  async listApps(uid: string) {
+    return [...miniapps(uid).values()].map(({ json: _j, ...rest }) => clone(rest));
+  },
+  async get(uid: string, appId: string) {
+    const r = miniapps(uid).get(appId);
+    return r ? clone(r) : null;
+  },
+  async setInstall(uid: string, appId: string, patch: { enabled?: boolean; onHome?: boolean }) {
+    const cur: MiniappStored = miniapps(uid).get(appId) ?? {
+      id: appId,
+      enabled: false,
+      onHome: false,
+      json: null,
+      rev: 0,
+      updatedAt: '',
+      dataUpdatedAt: null,
+      hasData: false,
+    };
+    miniapps(uid).set(appId, { ...cur, ...patch, updatedAt: new Date().toISOString() });
+  },
+  async putData(uid: string, appId: string, json: string, expectedRev: number | null) {
+    const cur = miniapps(uid).get(appId);
+    const rev = cur?.rev ?? 0;
+    if (expectedRev !== null && rev !== expectedRev) return { status: 'conflict' as const, rev };
+    const at = new Date().toISOString();
+    miniapps(uid).set(appId, {
+      id: appId,
+      enabled: cur?.enabled ?? false,
+      onHome: cur?.onHome ?? false,
+      json,
+      hasData: true,
+      rev: rev + 1,
+      updatedAt: at,
+      dataUpdatedAt: at,
+    });
+    return { status: 'ok' as const, rev: rev + 1, at };
+  },
+  async clearData(uid: string, appId: string) {
+    const cur = miniapps(uid).get(appId);
+    if (cur) miniapps(uid).set(appId, { ...cur, json: null, hasData: false, dataUpdatedAt: null });
+  },
 };

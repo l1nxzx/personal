@@ -76,6 +76,9 @@ export function useRealtime(enabled: boolean) {
         case 'vault':
           void qc.invalidateQueries({ queryKey: ['vault'] });
           break;
+        case 'miniapp':
+          void qc.invalidateQueries({ queryKey: ['miniapps'] });
+          break;
         case 'inbox':
           void qc.invalidateQueries({ queryKey: keys.inbox });
           void qc.invalidateQueries({ queryKey: keys.home });

@@ -2,7 +2,7 @@
 const token = (name) => `rgb(var(--${name}) / <alpha-value>)`;
 
 export default {
-  content: ['./index.html', './src/**/*.{ts,tsx}'],
+  content: ['./index.html', './src/**/*.{ts,tsx}', './miniapps/**/*.{ts,tsx}'],
   theme: {
     // Small, consistent radii. Nothing bubbly.
     borderRadius: {

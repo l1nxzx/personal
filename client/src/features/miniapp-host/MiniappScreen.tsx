@@ -1,0 +1,57 @@
+import { Link, useParams } from 'react-router-dom';
+import { Loading } from '../../components/ui/misc';
+import { useMiniappState } from './api';
+import { MiniappFrame } from './Frame';
+import { MiniappIcon } from './MiniappIcon';
+import { miniappById } from './registry';
+import { MiniappRuntime } from './Runtime';
+
+/** One miniapp, full screen (with the site's navigation around it). */
+export default function MiniappScreen() {
+  const { appId = '' } = useParams();
+  const def = miniappById(appId);
+  const state = useMiniappState();
+
+  if (!def)
+    return (
+      <MiniappFrame title="Not found">
+        <p className="text-sm text-ink-muted">There is no miniapp called “{appId}”.</p>
+      </MiniappFrame>
+    );
+
+  const icon = (
+    <MiniappIcon
+      glyph={def.icon.glyph}
+      background={def.icon.background}
+      color={def.icon.color}
+      size="sm"
+    />
+  );
+  if (state.isLoading)
+    return (
+      <MiniappFrame title={def.name} icon={icon}>
+        <Loading />
+      </MiniappFrame>
+    );
+  if (!state.data?.apps[def.id]?.enabled)
+    return (
+      <MiniappFrame title={def.name} icon={icon}>
+        <p className="text-sm text-ink-muted">
+          {def.name} isn’t on your miniapps screen.{' '}
+          <Link to="/miniapps/store" className="text-accent hover:underline">
+            Get it in the Store
+          </Link>
+          .
+        </p>
+      </MiniappFrame>
+    );
+
+  const App = def.App;
+  return (
+    <MiniappFrame title={def.name} icon={icon}>
+      <MiniappRuntime definition={def} place="app">
+        <App />
+      </MiniappRuntime>
+    </MiniappFrame>
+  );
+}

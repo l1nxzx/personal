@@ -617,7 +617,8 @@ export type ChangedEntity =
   | 'moneyIdea'
   | 'review'
   | 'moment'
-  | 'vault';
+  | 'vault'
+  | 'miniapp';
 
 export interface ServerEvent {
   type: 'changed';
@@ -1036,4 +1037,38 @@ export interface ActivityBeat {
 
 export interface ActivityRequest {
   beats: ActivityBeat[];
+}
+
+// ---------------------------------------------------------------- Miniapps
+/** The miniapps screen's background: a built-in template, or an uploaded picture. */
+export type MiniappWallpaper =
+  { kind: 'template'; id: string } | { kind: 'image'; version: string };
+
+export interface MiniappSettings {
+  wallpaper: MiniappWallpaper;
+  /** Icon order on the miniapps screen (app ids). */
+  order: string[];
+}
+
+/** One miniapp's place on this account (apps themselves live in client/miniapps/). */
+export interface MiniappInstall {
+  enabled: boolean;
+  /** Its widget is shown on Home. */
+  onHome: boolean;
+  /** It has saved data (kept while disabled, until deleted in the Store). */
+  hasData: boolean;
+  updatedAt: string;
+}
+
+export interface MiniappState {
+  settings: MiniappSettings;
+  apps: Record<string, MiniappInstall>;
+}
+
+/** A miniapp's own saved data: any JSON it chooses. */
+export interface MiniappData {
+  data: unknown;
+  /** Increments on every save; send it back to detect saves from another device. */
+  rev: number;
+  updatedAt: string | null;
 }

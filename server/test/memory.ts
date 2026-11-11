@@ -28,6 +28,7 @@ import type { LinkRecord } from '../src/data/linkRepo.js';
 import type { ProjectRecord } from '../src/data/projectRepo.js';
 import type { TaskRecord } from '../src/data/taskRepo.js';
 import type { EntryKeyRecord, PinDeviceRecord } from '../src/data/entryLockRepo.js';
+import type { MiniappRecord } from '../src/data/miniappRepo.js';
 import type { NewUser, UserPatch, UserRecord } from '../src/data/userRepo.js';
 
 const stores = {
@@ -62,6 +63,8 @@ const stores = {
   activityDays: new Map<string, Map<string, ActivityDayRecord>>(),
   entryKeys: new Map<string, EntryKeyRecord>(),
   pinDevices: new Map<string, Map<string, PinDeviceRecord>>(),
+  miniapps: new Map<string, Map<string, MiniappRecord & { hasData: boolean }>>(),
+  miniappSettings: new Map<string, Record<string, unknown>>(),
 };
 
 export function resetMemory() {

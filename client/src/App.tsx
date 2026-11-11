@@ -30,6 +30,10 @@ const pages = {
   SettingsPage: () => import('./pages/SettingsPage'),
   ProfilePage: () => import('./features/profile/ProfilePage'),
   NotFoundPage: () => import('./pages/NotFoundPage'),
+  MiniappsPage: () => import('./features/miniapp-host/MiniappsPage'),
+  MiniappStorePage: () => import('./features/miniapp-host/StorePage'),
+  MiniappWallpaperPage: () => import('./features/miniapp-host/WallpaperPage'),
+  MiniappScreen: () => import('./features/miniapp-host/MiniappScreen'),
 };
 const preloadPages = () => {
   Object.values(pages).forEach((load) => void load().catch(() => {}));
@@ -54,6 +58,10 @@ const VaultPage = lazy(pages.VaultPage);
 const SettingsPage = lazy(pages.SettingsPage);
 const ProfilePage = lazy(pages.ProfilePage);
 const NotFoundPage = lazy(pages.NotFoundPage);
+const MiniappsPage = lazy(pages.MiniappsPage);
+const MiniappStorePage = lazy(pages.MiniappStorePage);
+const MiniappWallpaperPage = lazy(pages.MiniappWallpaperPage);
+const MiniappScreen = lazy(pages.MiniappScreen);
 
 function RequireUser() {
   const { user, isLoading, expectUser } = useAuth();
@@ -126,6 +134,11 @@ export default function App() {
             <Route path="library/documents" element={<MovedToDocuments />} />
 
             <Route path="vault" element={<VaultPage />} />
+
+            <Route path="miniapps" element={<MiniappsPage />} />
+            <Route path="miniapps/store" element={<MiniappStorePage />} />
+            <Route path="miniapps/wallpaper" element={<MiniappWallpaperPage />} />
+            <Route path="miniapps/:appId" element={<MiniappScreen />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="*" element={<NotFoundPage />} />
