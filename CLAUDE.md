@@ -14,6 +14,7 @@ shared/   types.d.ts only (API types), imported by relative path from both apps
 
 - Browser talks only to `/api` (Vite proxy in dev, Netlify rewrite in prod). **Firebase is reached from `server/` only.**
 - Server layering: `routes/` (zod validation, no logic) → `services/` (business logic, no Express types) → `data/` (Firestore/Storage only). Authorization lives only in `server/src/permissions.ts`.
+- Miniapps: small optional apps in `client/miniapps/<id>/` (More → Miniapps, Store, Home widgets), separate from the site's code and built only on the toolkit `@miniapp/sdk`. **To create one, follow `client/miniapps/README.md`; do not change `client/src` or the server for it.**
 - Client: `features/<name>/` per area, `components/ui` + `components/shell` shared, `lib/apiFetch.ts` is the only way to call the API, server state in TanStack Query (keys in `lib/keys.ts`), small global state in React Context.
 - Realtime: Server-Sent Events (`/api/events`), tabs ignore their own echoes via `X-Client-Id`.
 - Hosting: backend on Render (`render.yaml`), frontend on Netlify (`netlify.toml`, proxies `/api/*` to Render).

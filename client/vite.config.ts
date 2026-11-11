@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -16,6 +17,12 @@ function buildId(): string {
 }
 
 export default defineConfig({
+  resolve: {
+    // The one thing miniapps (client/miniapps/) may import from the site: their toolkit.
+    alias: {
+      '@miniapp/sdk': fileURLToPath(new URL('./src/features/miniapp-host/sdk/index.ts', import.meta.url)),
+    },
+  },
   define: {
     __BUILD_ID__: JSON.stringify(buildId()),
   },

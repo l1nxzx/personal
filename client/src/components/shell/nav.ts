@@ -2,6 +2,7 @@ import {
   BookOpen,
   FolderOpen,
   House,
+  LayoutGrid,
   Library,
   Lightbulb,
   ListChecks,
@@ -45,6 +46,7 @@ export const NAV: NavItem[] = [
   { to: '/library', label: 'Library', title: 'Library', icon: Library },
   { to: '/documents', label: 'Documents', title: 'Documents', icon: FolderOpen },
   { to: '/vault', label: 'Vault', title: 'Private Vault', icon: LockKeyhole },
+  { to: '/miniapps', label: 'Miniapps', title: 'Miniapps', icon: LayoutGrid },
 ];
 
 export const PROFILE_NAV: NavItem = {

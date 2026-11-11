@@ -22,6 +22,7 @@ import { TaskRowSkeleton } from '../tasks/TaskRow';
 import { TaskList } from '../tasks/TasksPage';
 import { todayGroups } from '../tasks/views';
 import { promptFor } from './prompts';
+import { HomeWidgets } from '../miniapp-host/HomeWidgets';
 
 const TODAY_LIMIT = 8;
 
@@ -63,6 +64,7 @@ export default function HomePage() {
             <InboxLine />
           </div>
           <TodaySection />
+          <HomeWidgets />
         </div>
 
         <aside className="flex min-w-0 flex-col gap-10">
