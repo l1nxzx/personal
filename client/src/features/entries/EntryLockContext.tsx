@@ -55,12 +55,10 @@ interface EntryLockValue {
     confirm?: boolean;
     upgrade?: boolean;
   }) => Promise<boolean>;
-  /** Whether this entry (id or 'new') is the one the PIN opened. */
+  /** Whether the PIN has opened this entry (id or 'new') since the last lock. */
   isOpen: (scope: string) => boolean;
-  /** A new entry got its id: it stays the open one. */
+  /** A new entry got its id: it stays open under it. */
   rescope: (from: string, to: string) => void;
-  /** The open entry's screen closed: lock again (its text still saves, encrypted). */
-  release: (scope: string) => void;
   /** Entries still sealed with the vault key; opening them needs the passphrase once. */
   legacyLeft: number;
   /** Hides every locked entry at once; open editors still save, encrypted, in the background. */
@@ -108,11 +106,16 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
   const keyRef = useRef<CryptoKey | null>(null);
   const keyIdRef = useRef<string | null>(null);
   /**
-   * The one entry the PIN opened. Every other encrypted entry needs the PIN again, so a phone
-   * taken with one entry open gives access to that entry only.
+   * The entries the PIN has opened since the last lock. Each stays open (also after leaving it)
+   * until the next lock; every other encrypted entry needs the PIN first, so a phone taken with
+   * entries open gives access to those only.
    */
-  const [openFor, setOpenFor] = useState<string | null>(null);
-  const openForRef = useRef<string | null>(null);
+  const [openSet, setOpenSet] = useState<ReadonlySet<string>>(() => new Set());
+  const openSetRef = useRef<ReadonlySet<string>>(new Set());
+  const setOpen = (next: ReadonlySet<string>) => {
+    openSetRef.current = next;
+    setOpenSet(next);
+  };
   const pendingScope = useRef<string | null>(null);
   /** The key while open editors finish saving after a lock; it can only encrypt, not open. */
   const closingKeyRef = useRef<CryptoKey | null>(null);
@@ -147,8 +150,8 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
   const lockWith = useCallback((byHand: boolean) => {
     const key = keyRef.current;
     keyRef.current = null;
-    openForRef.current = null;
-    setOpenFor(null);
+    openSetRef.current = new Set();
+    setOpenSet(openSetRef.current);
     setUnlocked(false);
     setLegacyLeft(0);
     setLockedByHand(byHand);
@@ -161,12 +164,6 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
   }, []);
   const lock = useCallback(() => lockWith(true), [lockWith]);
   const autoLock = useCallback(() => lockWith(false), [lockWith]);
-  const release = useCallback(
-    (scope: string) => {
-      if (keyRef.current && openForRef.current === scope) lockWith(false);
-    },
-    [lockWith],
-  );
 
   // Signing out locks, and forgets this device's PIN for the account that signed out.
   const lastUser = useRef<string | null>(null);
@@ -224,7 +221,7 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
 
   const requestUnlock = useCallback(
     (opts: { scope: string; confirm?: boolean; upgrade?: boolean }) => {
-      if (keyRef.current && openForRef.current === opts.scope && !opts.confirm && !opts.upgrade)
+      if (keyRef.current && openSetRef.current.has(opts.scope) && !opts.confirm && !opts.upgrade)
         return Promise.resolve(true);
       pendingScope.current = opts.scope;
       setDialogMode(opts.upgrade ? 'upgrade' : 'auto');
@@ -234,19 +231,23 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const isOpen = useCallback((scope: string) => unlocked && openFor === scope, [unlocked, openFor]);
+  const isOpen = useCallback(
+    (scope: string) => unlocked && openSet.has(scope),
+    [unlocked, openSet],
+  );
   const rescope = useCallback((from: string, to: string) => {
-    if (openForRef.current !== from) return;
-    openForRef.current = to;
-    setOpenFor(to);
+    if (!openSetRef.current.has(from)) return;
+    const next = new Set(openSetRef.current);
+    next.delete(from);
+    next.add(to);
+    setOpen(next);
   }, []);
 
   const accept = useCallback(
     (key: CryptoKey, keyId: string) => {
       keyRef.current = key;
       keyIdRef.current = keyId;
-      openForRef.current = pendingScope.current;
-      setOpenFor(pendingScope.current);
+      if (pendingScope.current) setOpen(new Set([...openSetRef.current, pendingScope.current]));
       lastActive.current = Date.now();
       setLockedByHand(false);
       setUnlocked(true);
@@ -290,19 +291,8 @@ export function EntryLockProvider({ children }: { children: ReactNode }) {
       legacyLeft,
       isOpen,
       rescope,
-      release,
     }),
-    [
-      status,
-      requestUnlock,
-      lock,
-      lockedByHand,
-      registerFlush,
-      legacyLeft,
-      isOpen,
-      rescope,
-      release,
-    ],
+    [status, requestUnlock, lock, lockedByHand, registerFlush, legacyLeft, isOpen, rescope],
   );
 
   return (

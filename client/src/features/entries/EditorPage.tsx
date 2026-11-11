@@ -416,8 +416,6 @@ function Editor({
   lockRef.current = lock;
   /** This entry's id ('new' until saved): what the PIN opens for it. */
   const scopeRef = useRef(entry?.id ?? 'new');
-  /** Set while handing over to the same entry's encrypted editor: don't lock on the way. */
-  const handingOver = useRef(false);
   const lockable = kind !== 'note';
   const [locked, setLocked] = useState(() => entry?.locked ?? (lockable && !!seed?.locked));
   const cipher = useMemo<EntryCipher | null>(
@@ -456,13 +454,6 @@ function Editor({
   useEffect(
     () => (locked ? registerFlush(() => flushRef.current()) : undefined),
     [locked, registerFlush],
-  );
-  // Leaving the entry locks it: any other encrypted entry (or this one, later) needs the PIN.
-  useEffect(
-    () => () => {
-      if (!handingOver.current) lockRef.current.release(scopeRef.current);
-    },
-    [],
   );
 
   /** Lock with the PIN. Not yet saved: nothing to replace. Saved: every readable copy goes. */
@@ -532,7 +523,6 @@ function Editor({
     ed.forget(); // what's on screen is saved; nothing to write locally or send again
     // The PIN was just entered for this entry: it reopens (encrypted) without asking again.
     lock.rescope(scopeRef.current, done.id);
-    handingOver.current = done.locked;
     qc.setQueryData(keys.entry(kind, done.id), done);
     void qc.invalidateQueries({ queryKey: ['entries', kind] });
     void qc.invalidateQueries({ queryKey: ['versions', kind, done.id] });
