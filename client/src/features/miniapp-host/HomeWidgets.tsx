@@ -22,8 +22,7 @@ export function HomeWidgets() {
                 glyph={a.icon.glyph}
                 background={a.icon.background}
                 color={a.icon.color}
-                size="sm"
-                className="h-5 w-5 rounded-[6px] [&>svg]:h-3 [&>svg]:w-3"
+                size="xs"
               />
               {a.name}
             </Link>

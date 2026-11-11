@@ -34,20 +34,20 @@ export default function TeethWidget() {
                 onClick={() => update((d) => setSlot(d, today, slot, new Date().toISOString()))}
                 aria-pressed={done}
                 className={cn(
-                  'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs',
+                  'inline-flex h-8 items-center gap-1.5 rounded border px-2.5 text-xs',
                   done
-                    ? 'border-[#3fb39a]/60 bg-[#3fb39a]/15 text-ink'
+                    ? 'border-ok/50 bg-ok/10 text-ink'
                     : 'border-line-strong text-ink-muted active:bg-surface-2',
                 )}
               >
-                <Icon className={cn('h-3.5 w-3.5', done && 'text-[#3fb39a]')} strokeWidth={2.25} />
+                <Icon className={cn('h-3.5 w-3.5', done && 'text-ok')} strokeWidth={2.25} />
                 {slot === 'm' ? 'Morning' : 'Evening'}
               </button>
             );
           })}
           {s.streak > 0 && (
             <span className="ml-auto inline-flex items-center gap-1 text-sm text-ink">
-              <Flame className="h-4 w-4 text-[#f0954a]" strokeWidth={2} aria-hidden />
+              <Flame className="h-4 w-4 text-warn" strokeWidth={2} aria-hidden />
               {s.streak}
             </span>
           )}

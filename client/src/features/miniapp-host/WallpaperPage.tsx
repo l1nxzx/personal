@@ -1,15 +1,16 @@
-import { Check, Image, Upload } from 'lucide-react';
+import { Check, ImagePlus } from 'lucide-react';
 import { useRef } from 'react';
 import { ErrorNote, Loading } from '../../components/ui/misc';
 import { useToast } from '../../context/ToastContext';
 import { errorMessage } from '../../lib/apiFetch';
 import { cn } from '../../lib/cn';
 import { useMiniappState, useSetWallpaper } from './api';
+import { WALLPAPER_ICON } from './builtins';
 import { MiniappFrame } from './Frame';
 import { MiniappIcon } from './MiniappIcon';
 import { WALLPAPERS, wallpaperStyle } from './wallpapers';
 
-/** The miniapps screen's background: a template, or a picture of one's own. */
+/** The miniapps screen's background: the site's colours, a quiet solid, or a picture. */
 export default function WallpaperPage() {
   const state = useMiniappState();
   const { template, upload } = useSetWallpaper();
@@ -18,34 +19,55 @@ export default function WallpaperPage() {
   const current = state.data?.settings.wallpaper;
   const busy = template.isPending || upload.isPending;
   const onError = (err: unknown) => toast({ message: errorMessage(err), tone: 'error' });
-
-  const icon = (
-    <MiniappIcon
-      glyph={Image}
-      background="linear-gradient(160deg, #b08ad6 0%, #6c4f99 100%)"
-      size="sm"
-    />
-  );
-  const swatch = 'relative block aspect-[9/16] w-full overflow-hidden rounded-lg border';
+  // An old or unknown template shows as Plain, which is what the screen falls back to.
+  const currentId =
+    current?.kind === 'image'
+      ? 'picture'
+      : (WALLPAPERS.find((w) => current?.kind === 'template' && w.id === current.id)?.id ??
+        'plain');
+  const swatch = 'relative block aspect-[9/16] w-full overflow-hidden rounded-md border';
 
   return (
-    <MiniappFrame title="Wallpaper" icon={icon}>
+    <MiniappFrame title="Wallpaper" icon={<MiniappIcon {...WALLPAPER_ICON} size="sm" />}>
       {state.isLoading ? (
         <Loading />
       ) : state.isError ? (
         <ErrorNote onRetry={() => void state.refetch()}>{errorMessage(state.error)}</ErrorNote>
       ) : (
         <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+          {WALLPAPERS.map((w) => {
+            const on = currentId === w.id;
+            return (
+              <li key={w.id}>
+                <button
+                  type="button"
+                  disabled={busy}
+                  aria-pressed={on}
+                  aria-label={w.name}
+                  onClick={() => template.mutate(w.id, { onError })}
+                  className={cn(swatch, on ? 'border-accent ring-1 ring-accent' : 'border-line')}
+                  style={{ background: w.background }}
+                >
+                  {on && <Selected />}
+                </button>
+                <p className="mt-1.5 text-center text-2xs text-ink-muted">
+                  {w.name}
+                  {w.id === 'plain' && <span className="text-ink-faint"> (site)</span>}
+                </p>
+              </li>
+            );
+          })}
           <li>
             <button
               type="button"
               disabled={busy}
               onClick={() => fileRef.current?.click()}
+              aria-label="Your picture"
               className={cn(
                 swatch,
-                current?.kind === 'image'
-                  ? 'border-accent ring-2 ring-accent'
-                  : 'border-dashed border-line-strong',
+                currentId === 'picture'
+                  ? 'border-accent ring-1 ring-accent'
+                  : 'border-dashed border-line-strong bg-surface',
               )}
               style={
                 current?.kind === 'image'
@@ -53,13 +75,17 @@ export default function WallpaperPage() {
                   : undefined
               }
             >
-              <span className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-sm text-ink-muted">
-                {current?.kind !== 'image' && <Upload className="h-5 w-5" />}
-              </span>
-              {current?.kind === 'image' && <Selected />}
+              {currentId !== 'picture' && (
+                <ImagePlus className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 text-ink-faint" />
+              )}
+              {currentId === 'picture' && <Selected />}
             </button>
             <p className="mt-1.5 text-center text-2xs text-ink-muted">
-              {upload.isPending ? 'Uploading…' : 'Your picture'}
+              {upload.isPending
+                ? 'Uploading…'
+                : currentId === 'picture'
+                  ? 'Change picture'
+                  : 'Your picture'}
             </p>
             <input
               ref={fileRef}
@@ -77,25 +103,6 @@ export default function WallpaperPage() {
               }}
             />
           </li>
-          {WALLPAPERS.map((w) => {
-            const on = current?.kind === 'template' && current.id === w.id;
-            return (
-              <li key={w.id}>
-                <button
-                  type="button"
-                  disabled={busy}
-                  aria-pressed={on}
-                  aria-label={w.name}
-                  onClick={() => template.mutate(w.id, { onError })}
-                  className={cn(swatch, on ? 'border-accent ring-2 ring-accent' : 'border-line')}
-                  style={{ background: w.background }}
-                >
-                  {on && <Selected />}
-                </button>
-                <p className="mt-1.5 text-center text-2xs text-ink-muted">{w.name}</p>
-              </li>
-            );
-          })}
         </ul>
       )}
     </MiniappFrame>
@@ -104,8 +111,8 @@ export default function WallpaperPage() {
 
 function Selected() {
   return (
-    <span className="absolute bottom-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-accent-strong text-accent-ink">
-      <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+    <span className="absolute bottom-1.5 right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-accent-strong text-accent-ink">
+      <Check className="h-3 w-3" strokeWidth={2.75} />
     </span>
   );
 }
