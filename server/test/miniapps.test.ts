@@ -19,7 +19,12 @@ describe('miniapps', () => {
     const { agent } = await signedUpAgent();
     const state = (await agent.get('/api/miniapps').expect(200)).body.state;
     expect(state).toEqual({
-      settings: { wallpaper: { kind: 'template', id: 'plain' }, order: [], layout: null },
+      settings: {
+        wallpaper: { kind: 'template', id: 'plain' },
+        order: [],
+        layout: null,
+        folders: {},
+      },
       apps: {},
     });
   });
@@ -58,6 +63,34 @@ describe('miniapps', () => {
       .put('/api/miniapps/layout')
       .send({ layout: ['widget:Bad'] })
       .expect(400);
+  });
+
+  it('keeps folders on the screen, orders apps inside them in place, drops unused ones', async () => {
+    const { agent } = await signedUpAgent();
+    for (const id of ['teeth', 'water', 'mood'])
+      await agent.put(`/api/miniapps/apps/${id}`).send({ enabled: true }).expect(200);
+    const folders = {
+      fab: { name: 'Health', apps: ['mood', 'teeth', 'mood'] },
+      fzz: { name: 'Gone', apps: ['water'] },
+    };
+    let state = (
+      await agent
+        .put('/api/miniapps/layout')
+        .send({ layout: ['water', 'folder:fab', 'store', 'folder:nope'], folders })
+        .expect(200)
+    ).body.state;
+    expect(state.settings.layout).toEqual(['water', 'folder:fab', 'store']);
+    expect(state.settings.folders).toEqual({ fab: { name: 'Health', apps: ['mood', 'teeth'] } });
+    expect(state.settings.order).toEqual(['water', 'mood', 'teeth']);
+    // Without folders, the saved ones stay.
+    state = (
+      await agent
+        .put('/api/miniapps/layout')
+        .send({ layout: ['folder:fab', 'water'] })
+        .expect(200)
+    ).body.state;
+    expect(state.settings.folders.fab.name).toBe('Health');
+    expect(state.settings.order).toEqual(['mood', 'teeth', 'water']);
   });
 
   it('stores any JSON per app with a revision check, and deletes it on request', async () => {

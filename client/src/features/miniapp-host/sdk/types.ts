@@ -18,8 +18,10 @@ export interface MiniappDefinition<T = unknown> {
   icon: {
     /** The picture on the icon: an SVG component (a lucide icon works) drawn in `color`. */
     glyph: Glyph;
-    /** Icon colour: one muted colour (e.g. '#3f7a72'); the host adds the shading. */
+    /** Icon colour (e.g. '#22a38a'); also `var(--icon-bg)` inside a custom glyph. */
     background: string;
+    /** Optional: a two-colour gradient, top left to bottom right (e.g. ['#5fe0c4', '#14917a']). */
+    gradient?: readonly [string, string];
     /** Colour of the glyph. Default white. */
     color?: string;
   };
@@ -27,6 +29,12 @@ export interface MiniappDefinition<T = unknown> {
   App: Lazyable<object>;
   /** Optional Home widget (a small card). Load it lazily too. */
   Widget?: Lazyable<object>;
+  /**
+   * Optional: a red badge on the app's icon, worked out from its data: a number (how many things
+   * are waiting), `true` (a dot), or 0 / false / null (none). Runs whenever the miniapps screen
+   * shows, so keep it quick.
+   */
+  badge?: (data: T, now: Date) => number | boolean | null;
   /** The data a fresh install starts with (what `useAppData()` returns before anything is saved). */
   initialData: T;
   /**

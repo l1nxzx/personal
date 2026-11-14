@@ -9,7 +9,11 @@ import type { PointerEvent as ReactPointerEvent } from 'react';
  * - Mouse: press and move a few pixels.
  * - The tile follows the pointer as a lifted copy (`ghost`); the others slide out of its way
  *   (FLIP animation), and dropping calls `onDrop` with the new order if it changed.
+ * - Held over the middle of a tile that `canMerge` allows (an icon over an icon or a folder),
+ *   it doesn't push it aside: after a moment that tile is the `mergeTarget`, and dropping there
+ *   calls `onMerge` (to make or fill a folder).
  */
+const MERGE_DWELL = 280;
 const LONG_PRESS = 380;
 const SLOP_TOUCH = 10;
 const SLOP_MOUSE = 6;
@@ -45,13 +49,22 @@ export function useDragReorder({
   editing,
   onStart,
   onDrop,
+  canMerge,
+  onMerge,
 }: {
   keys: string[];
   editing: boolean;
   /** A tile was picked up (the screen enters arranging mode). */
   onStart: () => void;
   onDrop: (keys: string[]) => void;
+  canMerge?: (dragged: string, target: string) => boolean;
+  onMerge?: (dragged: string, target: string, order: string[]) => void;
 }) {
+  const [mergeTarget, setMergeTarget] = useState<string | null>(null);
+  const merge = useRef<{ key: string | null; pending: string | null; timer?: number }>({
+    key: null,
+    pending: null,
+  });
   const [order, setOrder] = useState(keys);
   const [ghost, setGhost] = useState<Ghost | null>(null);
   const els = useRef(new Map<string, HTMLElement>());
@@ -63,8 +76,18 @@ export function useDragReorder({
   const scrollRaf = useRef<number>();
   const keysRef = useRef(keys);
   keysRef.current = keys;
-  const cbs = useRef({ onStart, onDrop, editing });
-  cbs.current = { onStart, onDrop, editing };
+  const cbs = useRef({ onStart, onDrop, editing, canMerge, onMerge });
+  cbs.current = { onStart, onDrop, editing, canMerge, onMerge };
+
+  const clearMerge = () => {
+    const m = merge.current;
+    window.clearTimeout(m.timer);
+    m.pending = null;
+    if (m.key) {
+      m.key = null;
+      setMergeTarget(null);
+    }
+  };
 
   // Follow the saved order whenever no tile is being dragged.
   const keysSig = keys.join('|');
@@ -115,7 +138,7 @@ export function useDragReorder({
   const retarget = useCallback(
     (x: number, y: number) => {
       const p = press.current;
-      if (!p || performance.now() - lastMove.current < 90) return;
+      if (!p) return;
       const cur = orderRef.current;
       const from = cur.indexOf(p.key);
       for (let i = 0; i < cur.length; i++) {
@@ -123,6 +146,27 @@ export function useDragReorder({
         if (k === p.key) continue;
         const r = els.current.get(k)?.getBoundingClientRect();
         if (!r || x < r.left || x > r.right || y < r.top || y > r.bottom) continue;
+        // Over the middle of an icon it may take: wait, then offer to make a folder.
+        const inMiddle =
+          Math.abs(x - (r.left + r.width / 2)) < r.width * 0.3 &&
+          y < r.top + r.height * 0.72 &&
+          y > r.top + r.height * 0.04;
+        if (inMiddle && cbs.current.canMerge?.(p.key, k)) {
+          const m = merge.current;
+          if (m.key !== k && m.pending !== k) {
+            clearMerge();
+            m.pending = k;
+            m.timer = window.setTimeout(() => {
+              m.pending = null;
+              m.key = k;
+              navigator.vibrate?.(8);
+              setMergeTarget(k);
+            }, MERGE_DWELL);
+          }
+          return;
+        }
+        clearMerge();
+        if (performance.now() - lastMove.current < 90) return;
         // Only past the middle of a tile (in reading order) does it give way, so tiles of
         // different sizes don't swap back and forth.
         const cx = r.left + r.width / 2;
@@ -134,6 +178,8 @@ export function useDragReorder({
         else if (i < from && beforeMid) move(i);
         return;
       }
+      clearMerge();
+      if (performance.now() - lastMove.current < 90) return;
       // Below the last tile: to the end.
       const last = els.current.get(cur[cur.length - 1]!)?.getBoundingClientRect();
       if (last && y > last.bottom && from !== cur.length - 1) move(cur.length - 1);
@@ -180,7 +226,12 @@ export function useDragReorder({
     window.addEventListener('click', swallow, { capture: true, once: true });
     setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 60);
     const next = orderRef.current;
-    if (!commit) setOrder(keysRef.current);
+    const into = merge.current.key;
+    clearMerge();
+    if (commit && into && cbs.current.onMerge) {
+      setOrder(keysRef.current.filter((k) => k !== p.key));
+      cbs.current.onMerge(p.key, into, next);
+    } else if (!commit) setOrder(keysRef.current);
     else if (next.join('|') !== keysRef.current.join('|')) cbs.current.onDrop(next);
   }, []);
 
@@ -280,5 +331,5 @@ export function useDragReorder({
     cbs.current.onDrop(next);
   }, []);
 
-  return { order, ghost, dragging: ghost?.key ?? null, bind, nudge };
+  return { order, ghost, dragging: ghost?.key ?? null, mergeTarget, bind, nudge };
 }

@@ -72,17 +72,19 @@ export function useSetWallpaper() {
   return { template, upload };
 }
 
-/** Saves the screen's arrangement; the screen shows it at once. */
+/** Saves the screen's arrangement (and folders, when given); the screen shows it at once. */
 export function useSetLayout() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (layout: string[]) =>
-      apiFetch<{ state: MiniappState }>('/miniapps/layout', { method: 'PUT', body: { layout } }),
-    onMutate: async (layout) => {
+    mutationFn: (v: { layout: string[]; folders?: MiniappSettings['folders'] }) =>
+      apiFetch<{ state: MiniappState }>('/miniapps/layout', { method: 'PUT', body: v }),
+    onMutate: async ({ layout, folders }) => {
       await qc.cancelQueries({ queryKey: STATE_KEY });
       const before = qc.getQueryData<MiniappState>(STATE_KEY);
       qc.setQueryData<MiniappState>(STATE_KEY, (s) =>
-        s ? { ...s, settings: { ...s.settings, layout } } : s,
+        s
+          ? { ...s, settings: { ...s.settings, layout, folders: folders ?? s.settings.folders } }
+          : s,
       );
       return { before };
     },

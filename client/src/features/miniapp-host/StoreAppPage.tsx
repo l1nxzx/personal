@@ -5,7 +5,8 @@ import { Loading } from '../../components/ui/misc';
 import { useConfirm } from '../../context/ConfirmContext';
 import { useToast } from '../../context/ToastContext';
 import { errorMessage } from '../../lib/apiFetch';
-import { useDeleteData, useMiniappState, useSetInstall } from './api';
+import { useDeleteData, useMiniappState, useSetInstall, useSetLayout } from './api';
+import { keysToSave, screenTiles, widgetKey } from './layout';
 import { MiniappFrame } from './Frame';
 import { MiniappIcon } from './MiniappIcon';
 import { miniappById } from './registry';
@@ -17,6 +18,7 @@ export default function StoreAppPage() {
   const m = miniappById(appId);
   const state = useMiniappState();
   const setInstall = useSetInstall();
+  const setLayout = useSetLayout();
   const deleteData = useDeleteData();
   const confirm = useConfirm();
   const toast = useToast();
@@ -46,21 +48,19 @@ export default function StoreAppPage() {
       },
     );
   const Widget = m.Widget;
+  const visible = screenTiles(state.data).map((t) => t.key);
+  const saved = state.data?.settings.layout ?? null;
+  const onScreen = visible.includes(widgetKey(m.id));
 
   return (
     <MiniappFrame title={m.name} back={back} hideTitle>
       {/* Header */}
       <div className="flex items-center gap-5">
-        <MiniappIcon
-          glyph={m.icon.glyph}
-          background={m.icon.background}
-          color={m.icon.color}
-          size="lg"
-        />
+        <MiniappIcon {...m.icon} size="lg" />
         <div className="min-w-0">
           <h1 className="page-title">{m.name}</h1>
           <p className="mt-1 text-sm text-ink-faint">
-            Miniapp{Widget && ' · Home widget'}
+            Miniapp{Widget && ' · Widget'}
             {enabled && <span className="text-ok"> · On your screen</span>}
           </p>
         </div>
@@ -95,23 +95,42 @@ export default function StoreAppPage() {
         )}
       </div>
       {enabled && Widget && (
-        <label
-          className="mt-4 flex cursor-pointer select-none items-center gap-3 text-sm text-ink-muted"
-          onClick={(e) => {
-            if ((e.target as HTMLElement).closest('[role=checkbox]')) return;
-            const on = !install?.onHome;
-            change({ onHome: on }, on ? 'Widget added to Home' : 'Widget removed from Home');
-          }}
-        >
-          <Checkbox
+        <div className="mt-4 space-y-3">
+          <ToggleRow
             checked={!!install?.onHome}
+            label="Show the widget on Home"
             onChange={(on) =>
               change({ onHome: on }, on ? 'Widget added to Home' : 'Widget removed from Home')
             }
-            label="Show the widget on Home"
           />
-          Show the widget on Home
-        </label>
+          <ToggleRow
+            checked={onScreen}
+            label="Show the widget on the miniapps screen"
+            onChange={(on) => {
+              const key = widgetKey(m.id);
+              setLayout.mutate(
+                on
+                  ? { layout: keysToSave(saved, [key, ...visible]) }
+                  : {
+                      layout: keysToSave(
+                        saved,
+                        visible.filter((k) => k !== key),
+                        [key],
+                      ),
+                    },
+                {
+                  onSuccess: () =>
+                    toast({
+                      message: on
+                        ? 'Widget added to the miniapps screen'
+                        : 'Widget removed from the miniapps screen',
+                    }),
+                  onError: (err) => toast({ message: errorMessage(err), tone: 'error' }),
+                },
+              );
+            }}
+          />
+        </div>
       )}
 
       {/* About */}
@@ -130,7 +149,7 @@ export default function StoreAppPage() {
       {/* Widget preview */}
       {Widget && (
         <section className="mt-10">
-          <h2 className="section-label mb-3">Home widget</h2>
+          <h2 className="section-label mb-3">Widget</h2>
           <div
             aria-hidden
             // A picture of the widget, not a working one (React 18's types lack `inert`).
@@ -176,5 +195,29 @@ export default function StoreAppPage() {
         </section>
       )}
     </MiniappFrame>
+  );
+}
+
+/** A checkbox with its label; the whole row toggles it. */
+function ToggleRow({
+  checked,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  label: string;
+  onChange: (on: boolean) => void;
+}) {
+  return (
+    <label
+      className="flex cursor-pointer select-none items-center gap-3 text-sm text-ink-muted"
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest('[role=checkbox]')) return;
+        onChange(!checked);
+      }}
+    >
+      <Checkbox checked={checked} onChange={onChange} label={label} />
+      {label}
+    </label>
   );
 }

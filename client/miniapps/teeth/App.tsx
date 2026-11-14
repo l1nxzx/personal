@@ -1,7 +1,17 @@
 import { Check, Flame, Moon, Sun } from 'lucide-react';
-import { addDays, cn, dateOf, SectionLabel, useAppData, useNow, useToast } from '@miniapp/sdk';
+import { addDays, cn, useAppData, useNow, useToast } from '@miniapp/sdk';
+import { History } from './History';
 import { Molar } from './Molar';
-import { currentSlot, moodOf, setSlot, stats, todayKey, type BrushData, type Slot } from './logic';
+import {
+  currentSlot,
+  moodOf,
+  pastTime,
+  setSlot,
+  stats,
+  todayKey,
+  type BrushData,
+  type Slot,
+} from './logic';
 
 const SLOT = {
   m: { label: 'Morning', Icon: Sun },
@@ -22,7 +32,8 @@ export default function TeethApp() {
   if (isLoading) return <div className="h-64" />;
 
   const log = (day: string, slot: Slot) => {
-    update((d) => setSlot(d, day, slot, new Date().toISOString()));
+    const at = day === today ? new Date().toISOString() : pastTime(day, slot);
+    update((d) => setSlot(d, day, slot, at));
     toast({
       message: `${SLOT[slot].label} brush logged`,
       action: { label: 'Undo', onClick: () => update((d) => setSlot(d, day, slot, null)) },
@@ -122,11 +133,8 @@ export default function TeethApp() {
         <Number value={s.total} label="brushes" />
       </div>
 
-      {/* Last two weeks */}
-      <section>
-        <SectionLabel>Last two weeks</SectionLabel>
-        <History data={data} today={today} />
-      </section>
+      {/* The record: two weeks, or every month; tap a day to fix it */}
+      <History data={data} today={today} firstDay={s.firstDay} update={update} />
     </div>
   );
 }
@@ -139,38 +147,6 @@ function Number({ value, label, flame }: { value: number; label: string; flame?:
         {value}
       </div>
       <div className="mt-1 text-2xs text-ink-faint">{label}</div>
-    </div>
-  );
-}
-
-function History({ data, today }: { data: BrushData; today: string }) {
-  const days = Array.from({ length: 14 }, (_, i) => addDays(today, i - 13));
-  return (
-    <div
-      className="grid grid-cols-[repeat(14,minmax(0,1fr))] gap-1"
-      aria-label="Brushing, last two weeks"
-    >
-      {days.map((d) => {
-        const v = data.days[d];
-        const weekday = dateOf(d).toLocaleDateString([], { weekday: 'narrow' });
-        return (
-          <div key={d} className="flex flex-col items-center gap-1" title={d}>
-            {(['m', 'e'] as const).map((slot) => (
-              <span
-                key={slot}
-                className={cn(
-                  'h-4 w-full max-w-[1.25rem] rounded-sm',
-                  v?.[slot] ? 'bg-ok/80' : 'bg-ink/10',
-                  d === today && 'ring-1 ring-accent',
-                )}
-              />
-            ))}
-            <span className={cn('text-[0.625rem]', d === today ? 'text-ink' : 'text-ink-faint')}>
-              {weekday}
-            </span>
-          </div>
-        );
-      })}
     </div>
   );
 }

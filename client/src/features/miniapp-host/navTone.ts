@@ -1,13 +1,18 @@
 import { useMiniappState } from './api';
+import { usePictureTone } from './pictureTone';
 import { wallpaperStyle } from './wallpapers';
 
 /**
  * How the phone's bottom bar should look over the miniapps screen's wallpaper: frosted, and
- * tinted to its labels ('light' labels: a dark tint; 'dark' labels: a light one; 'theme': the
- * site's own background, translucent). null when the screen isn't showing.
+ * tinted to what is under it ('light' text: a dark tint; 'dark' text: a light one; 'theme': the
+ * site's own background, translucent). For a picture, its bottom strip decides. null when the
+ * screen isn't showing.
  */
 export function useWallpaperNavTone(onScreen: boolean): 'light' | 'dark' | 'theme' | null {
   const state = useMiniappState(onScreen);
+  const wallpaper = onScreen ? state.data?.settings.wallpaper : undefined;
+  const tone = usePictureTone(wallpaper);
   if (!onScreen) return null;
-  return wallpaperStyle(state.data?.settings.wallpaper).ink;
+  if (wallpaper?.kind === 'image') return tone?.bar ?? 'light';
+  return wallpaperStyle(wallpaper).ink;
 }

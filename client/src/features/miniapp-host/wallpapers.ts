@@ -1,5 +1,5 @@
 import type { MiniappWallpaper } from '../../../../shared/types';
-import { API_BASE } from '../../lib/apiFetch';
+import { pictureUrl, type PictureTone } from './pictureTone';
 
 /**
  * Backgrounds for the miniapps screen: the site's own colours (they follow dark/light mode), a
@@ -23,17 +23,26 @@ export const WALLPAPERS: {
 
 export const DEFAULT_WALLPAPER = WALLPAPERS[0]!;
 
-/** CSS background and label colour for a wallpaper setting (unknown ids fall back to Plain). */
-export function wallpaperStyle(w: MiniappWallpaper | undefined): {
+/**
+ * CSS background and label colour for a wallpaper setting (unknown ids fall back to Plain). A
+ * picture's label colour follows its brightness (`tone`, see pictureTone.ts): white labels on a
+ * slightly darkened dark picture, dark labels on a slightly lightened light one.
+ */
+export function wallpaperStyle(
+  w: MiniappWallpaper | undefined,
+  tone?: PictureTone | null,
+): {
   background: string;
   ink: 'theme' | 'light' | 'dark';
 } {
-  if (w?.kind === 'image')
+  if (w?.kind === 'image') {
+    const light = tone?.ink === 'dark';
+    const shade = light ? 'rgb(255 255 255 / 0.1)' : 'rgb(0 0 0 / 0.22)';
     return {
-      // A light shade over the picture keeps the labels readable.
-      background: `linear-gradient(rgb(0 0 0 / 0.28), rgb(0 0 0 / 0.28)), url("${API_BASE}/miniapps/wallpaper/${w.version}") center / cover no-repeat`,
-      ink: 'light',
+      background: `linear-gradient(${shade}, ${shade}), url("${pictureUrl(w.version)}") center / cover no-repeat`,
+      ink: light ? 'dark' : 'light',
     };
+  }
   return WALLPAPERS.find((x) => w?.kind === 'template' && x.id === w.id) ?? DEFAULT_WALLPAPER;
 }
 
@@ -42,7 +51,9 @@ export const inkClass = (ink: 'theme' | 'light' | 'dark', onPicture = false) =>
   ink === 'theme'
     ? 'text-ink'
     : ink === 'dark'
-      ? 'text-[#1d222b]'
+      ? onPicture
+        ? 'text-[#15191f] [text-shadow:0_1px_2px_rgb(255_255_255/0.45)]'
+        : 'text-[#1d222b]'
       : onPicture
         ? 'text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.45)]'
         : 'text-[#e8ebf0]';

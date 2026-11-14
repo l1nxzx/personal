@@ -20,11 +20,12 @@ change.
 - Inside, look like the rest of the site, not like a generated app: the site's colour tokens, its
   type (serif for big numbers and titles, sans for the rest), small radii, hairlines rather than
   boxes, no gradients, glows or glossy effects.
-- The icon: choose one muted colour and a white glyph. The framework draws the rest (the squircle,
-  its soft shading, light and edge), so every icon on the screen matches; don't add effects
-  yourself. A lucide icon works; a custom glyph looks more finished as a filled white shape, with
-  cut-outs drawn in `var(--icon-bg)` (the icon's colour), like the built-in Store and Wallpaper
-  icons (`src/features/miniapp-host/builtins.tsx`) and Brush's tooth.
+- The icon should look like a real phone app's: a clear, confident colour (or a two-colour
+  `gradient`, top left to bottom right) and a large, bold glyph. No shadows or bevels: the
+  framework draws the squircle and nothing else. A custom glyph looks best as a filled white
+  shape with cut-outs drawn in `var(--icon-bg)` (the icon's colour), like Brush's tooth and the
+  built-in Store icon; a white icon with a full-colour picture works too (the Wallpaper icon).
+  See `src/features/miniapp-host/builtins.tsx`. A lucide line icon works but looks plainer.
 - Keep it simple and small. Style with Tailwind classes and the site's colour tokens (`bg-surface`,
   `border-line`, `text-ink`, `text-ink-muted`, `text-ink-faint`, `text-accent`, `bg-ok/10`,
   `text-bad`…), so it works in dark and light mode. An app may have its own accent colours.
@@ -46,7 +47,7 @@ client/miniapps/<id>/
 ```ts
 import { lazy } from 'react';
 import { Droplet } from 'lucide-react';
-import { defineMiniapp } from '@miniapp/sdk';
+import { dayKey, defineMiniapp } from '@miniapp/sdk';
 
 export interface WaterData {
   days: Record<string, number>;
@@ -59,12 +60,14 @@ export default defineMiniapp<WaterData>({
   about: ['A tap per glass.', 'Your days at a glance.'], // optional: points for its Store page
   icon: {
     glyph: Droplet, // a lucide icon, or an SVG component ({ className, strokeWidth })
-    background: '#3d6a8c', // one muted colour; the framework shades it
+    background: '#2f7fd8', // the icon's colour (also var(--icon-bg) in a custom glyph)
+    gradient: ['#5fb0ff', '#2a6fd0'], // optional, top left to bottom right
     // color: '#fff',       // glyph colour, default white
   },
   App: lazy(() => import('./App')),
   Widget: lazy(() => import('./Widget')), // optional
   initialData: { days: {} }, // what the app starts with before anything is saved
+  badge: (d, now) => ((d.days[dayKey(now)] ?? 0) < 8 ? 1 : 0), // optional red badge on the icon
   // merge: (server, local) => ..., // optional, see "Data"
 });
 ```
@@ -115,6 +118,13 @@ the `teeth` app does, so the manifest stays small.)
 | `useToast()`                                         | `toast({ message, tone?: 'error', action?: { label, onClick } })`.                                                                                         |
 | `Button`, `IconButton`, `Card`, `SectionLabel`, `cn` | The site's button and card styles, a section heading, class joining.                                                                                       |
 
+## Badge
+
+`badge(data, now)` (optional) puts a red badge on the icon: a number (things waiting), `true` (a
+dot), or 0 / false / null for none. It is worked out from the app's saved data whenever the
+miniapps screen shows (folders add up their apps' badges), so keep it quick and pure. Badge only
+what is actually due (Brush: brushes due today and not logged).
+
 ## Data
 
 - Each app has **one** JSON value (`initialData`'s shape), up to about 300 KB. It is saved to the
@@ -140,5 +150,6 @@ the `teeth` app does, so the manifest stays small.)
 
 ## Existing miniapps
 
-- `teeth` (**Brush**): morning and evening brushing, streaks, the last two weeks, and Molar the
-  tooth, who gets mad when you skip. Widget on Home.
+- `teeth` (**Brush**): morning and evening brushing, streaks, the last two weeks (tap a day to add
+  or remove a forgotten brush), a month calendar behind "Show more" going back to the first log,
+  and Molar the tooth, who gets mad when you skip. Widget; badge for brushes due today.

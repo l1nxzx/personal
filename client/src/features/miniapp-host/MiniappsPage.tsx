@@ -1,22 +1,38 @@
 import { Minus, Plus } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import type { KeyboardEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import type { KeyboardEvent, MouseEvent } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { PAGE_FRAME } from '../../components/shell/PageHeader';
 import { Dialog } from '../../components/ui/Dialog';
 import { useToast } from '../../context/ToastContext';
 import { errorMessage } from '../../lib/apiFetch';
 import { cn } from '../../lib/cn';
 import { enabledApps, useMiniappState, useSetInstall, useSetLayout } from './api';
-import { CLOCK_ICON, STORE_ICON, WALLPAPER_ICON } from './builtins';
+import { sumBadges, useBadges, type Badge } from './badges';
+import { CLOCK_ICON } from './builtins';
 import { ClockWidget } from './ClockWidget';
-import { CLOCK_KEY, keysToSave, screenTiles, widgetKey, type Tile } from './layout';
+import { FolderView } from './FolderView';
+import { iconLookOf } from './iconLooks';
+import { launchFrom } from './launch';
+import {
+  CLOCK_KEY,
+  dropIntoFolder,
+  folderKey,
+  isIcon,
+  keysToSave,
+  screenTiles,
+  takeOutOfFolder,
+  widgetKey,
+  type Folders,
+  type IconTile,
+  type Tile,
+} from './layout';
 import { MiniappIcon } from './MiniappIcon';
+import { usePictureTone } from './pictureTone';
 import { MiniappRuntime } from './Runtime';
+import { BadgeDot, FolderIcon, type Tone } from './tiles';
 import { useDragReorder } from './useDragReorder';
 import { inkClass, wallpaperStyle } from './wallpapers';
-
-type Tone = 'light' | 'dark' | 'theme';
 
 /** Small rounded buttons that sit on the wallpaper (Edit, Done, Add widget). */
 const PILL: Record<Tone, string> = {
@@ -27,51 +43,75 @@ const PILL: Record<Tone, string> = {
 
 /** Glass for widgets on the wallpaper: the site's surface, translucent and frosted. */
 const GLASS =
-  'rounded-[1.25rem] bg-surface/[0.86] shadow-[0_6px_20px_-6px_rgb(0_0_0/0.35)] ring-1 ring-inset ring-white/[0.08] backdrop-blur-xl backdrop-saturate-150';
+  'rounded-[1.25rem] bg-surface/[0.86] ring-1 ring-inset ring-white/[0.08] backdrop-blur-xl backdrop-saturate-150';
 
 /**
- * The miniapps screen, like a phone's home screen: app icons and widgets on a wallpaper. Hold a
- * tile (or press Edit) to arrange: tiles wobble, can be dragged anywhere, widgets can be added
- * and removed, apps taken off the screen. The arrangement is saved to the account.
+ * The miniapps screen, like a phone's home screen: app icons, folders and widgets on a
+ * wallpaper. Hold a tile (or press Edit) to arrange: tiles wobble and can be dragged anywhere;
+ * an icon held over another icon makes a folder (or goes into a folder); widgets can be added
+ * and removed; apps taken off the screen. Opening an app grows its icon into the screen.
  */
 export default function MiniappsPage() {
   const state = useMiniappState();
   const toast = useToast();
+  const navigate = useNavigate();
   const setLayout = useSetLayout();
   const setInstall = useSetInstall();
   const [editing, setEditing] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [open, setOpen] = useState<{ id: string; origin: DOMRect | null } | null>(null);
 
   const apps = enabledApps(state.data);
   const tiles = screenTiles(state.data);
   const byKey = new Map(tiles.map((t) => [t.key, t]));
   const visible = tiles.map((t) => t.key);
   const saved = state.data?.settings.layout ?? null;
+  const folders: Folders = state.data?.settings.folders ?? {};
+  const badges = useBadges(apps);
 
   const wallpaper = state.data?.settings.wallpaper;
-  const wp = wallpaperStyle(wallpaper);
+  const wp = wallpaperStyle(wallpaper, usePictureTone(wallpaper));
   const tone: Tone = wp.ink;
   const ink = inkClass(wp.ink, wallpaper?.kind === 'image');
 
   const onError = (err: unknown) => toast({ message: errorMessage(err), tone: 'error' });
-  const save = (keys: string[], removed?: string[]) =>
-    setLayout.mutate(keysToSave(saved, keys, removed), { onError });
+  const save = (keys: string[], removed?: string[], nextFolders?: Folders) =>
+    setLayout.mutate(
+      { layout: keysToSave(saved, keys, removed), folders: nextFolders },
+      { onError },
+    );
 
+  const isIconKey = (k: string) => {
+    const t = byKey.get(k);
+    return !!t && isIcon(t);
+  };
   const drag = useDragReorder({
     keys: visible,
     editing,
     onStart: () => setEditing(true),
     onDrop: (keys) => save(keys),
+    canMerge: (d, t) => isIconKey(d) && (isIconKey(t) || byKey.get(t)?.kind === 'folder'),
+    onMerge: (d, t, order) => {
+      const r = dropIntoFolder(order, folders, d, t);
+      save(r.keys, undefined, r.folders);
+    },
   });
 
   useEffect(() => {
     if (!editing) return;
     const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape' && !adding) setEditing(false);
+      if (e.key === 'Escape' && !adding && !open) setEditing(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [editing, adding]);
+  }, [editing, adding, open]);
+
+  const badgeOf = (t: Tile): Badge | undefined =>
+    t.kind === 'app'
+      ? badges[t.app.id]
+      : t.kind === 'folder'
+        ? sumBadges(t.items.map((i) => badges[i.key]))
+        : undefined;
 
   const removeWidget = (key: string) => {
     const before = saved ?? visible;
@@ -81,8 +121,18 @@ export default function MiniappsPage() {
     );
     toast({
       message: 'Widget removed',
-      action: { label: 'Undo', onClick: () => setLayout.mutate(before, { onError }) },
+      action: { label: 'Undo', onClick: () => setLayout.mutate({ layout: before }, { onError }) },
     });
+  };
+
+  const removeFolder = (t: Extract<Tile, { kind: 'folder' }>) => {
+    const f = folders[t.id];
+    if (!f) return;
+    const keys = visible.flatMap((k) => (k === t.key ? f.apps : [k]));
+    const rest = { ...folders };
+    delete rest[t.id];
+    save(keys, [t.key], rest);
+    toast({ message: `${t.name} removed. Its apps are back on the screen.` });
   };
 
   const removeApp = (tile: Extract<Tile, { kind: 'app' }>) => {
@@ -109,22 +159,33 @@ export default function MiniappsPage() {
     toast({ message: 'Widget added' });
   };
 
+  const openIcon = useCallback(
+    (to: string, iconEl: HTMLElement | null) => launchFrom(iconEl, () => navigate(to)),
+    [navigate],
+  );
+
   const tileProps = (t: Tile, i: number) => ({
     tile: t,
     editing,
     ink,
+    tone,
     alt: i % 2 === 1,
+    badge: badgeOf(t),
+    merging: drag.mergeTarget === t.key,
     onNudge: (by: number) => drag.nudge(t.key, by),
+    onOpenIcon: openIcon,
+    onOpenFolder: (id: string, origin: DOMRect | null) => setOpen({ id, origin }),
   });
 
   const ghostTile = drag.ghost ? byKey.get(drag.ghost.key) : undefined;
+  const openFolder = open ? byKey.get(folderKey(open.id)) : undefined;
 
   return (
     <>
       <div
         aria-hidden
         data-testid="miniapps-wallpaper"
-        className="fixed inset-0 lg:left-[13.5rem]"
+        className="fixed inset-0 transition-[background] lg:left-[13.5rem]"
         style={{ background: wp.background }}
       />
       <div
@@ -179,7 +240,7 @@ export default function MiniappsPage() {
         </header>
 
         <ul
-          className="mt-6 grid grid-cols-4 gap-x-2 gap-y-5 sm:grid-cols-6 lg:grid-cols-8"
+          className="mt-6 grid grid-cols-4 gap-x-2 gap-y-6 sm:grid-cols-6 lg:grid-cols-8"
           data-backdrop="1"
           aria-label="Apps and widgets"
         >
@@ -206,9 +267,17 @@ export default function MiniappsPage() {
                     label={
                       t.kind === 'app'
                         ? `Remove ${t.app.name} from the screen`
-                        : `Remove the ${t.kind === 'clock' ? 'clock' : t.app.name} widget`
+                        : t.kind === 'folder'
+                          ? `Remove the ${t.name} folder (its apps stay)`
+                          : `Remove the ${t.kind === 'clock' ? 'clock' : t.app.name} widget`
                     }
-                    onRemove={() => (t.kind === 'app' ? removeApp(t) : removeWidget(t.key))}
+                    onRemove={() =>
+                      t.kind === 'app'
+                        ? removeApp(t)
+                        : t.kind === 'folder'
+                          ? removeFolder(t)
+                          : removeWidget(t.key)
+                    }
                   />
                 )}
               </li>
@@ -233,8 +302,34 @@ export default function MiniappsPage() {
             transform: `translate(${drag.ghost.x}px, ${drag.ghost.y}px) scale(1.08)`,
           }}
         >
-          <TileView tile={ghostTile} editing ink={ink} lifted onNudge={() => {}} />
+          <TileView {...tileProps(ghostTile, 0)} editing lifted merging={false} />
         </div>
+      )}
+
+      {openFolder?.kind === 'folder' && (
+        <FolderView
+          name={openFolder.name}
+          items={openFolder.items}
+          origin={open?.origin ?? null}
+          tone={tone}
+          ink={ink}
+          badges={badges}
+          editing={editing}
+          onClose={() => setOpen(null)}
+          onRename={(name) => {
+            const f = folders[openFolder.id];
+            if (f) save(visible, undefined, { ...folders, [openFolder.id]: { ...f, name } });
+          }}
+          onTakeOut={(key) => {
+            const r = takeOutOfFolder(visible, folders, openFolder.id, key);
+            save(r.keys, undefined, r.folders);
+            if (!r.folders[openFolder.id]) setOpen(null);
+          }}
+          onOpen={(t, el) => {
+            setOpen(null);
+            openIcon(iconLookOf(t).to, el);
+          }}
+        />
       )}
 
       <AddWidgetDialog
@@ -250,22 +345,35 @@ export default function MiniappsPage() {
   );
 }
 
-/** One tile's picture: an icon with its name, a widget card, or the clock. */
+const LABEL = 'max-w-full truncate px-1 text-[0.8125rem] leading-4';
+
+/** One tile's picture: an icon or folder with its name, a widget card, or the clock. */
 function TileView({
   tile,
   editing,
   ink,
+  tone,
   alt,
   lifted,
+  badge,
+  merging,
   onNudge,
+  onOpenIcon,
+  onOpenFolder,
 }: {
   tile: Tile;
   editing: boolean;
   ink: string;
+  tone: Tone;
   alt?: boolean;
-  /** Being dragged: no wobble, a deeper shadow. */
+  /** Being dragged: no wobble, no label. */
   lifted?: boolean;
+  badge?: Badge;
+  /** A dragged icon is held over this one: it is about to become (or join) a folder. */
+  merging: boolean;
   onNudge: (by: number) => void;
+  onOpenIcon: (to: string, iconEl: HTMLElement | null) => void;
+  onOpenFolder: (id: string, origin: DOMRect | null) => void;
 }) {
   const jiggle = editing && !lifted && cn('tile-jiggle', alt && 'tile-jiggle-b');
   const onKeyDown = (e: KeyboardEvent) => {
@@ -324,7 +432,7 @@ function TileView({
           draggable={false}
           tabIndex={editing ? -1 : 0}
           onClick={(e) => editing && e.preventDefault()}
-          className={cn('max-w-full truncate px-1 text-[0.75rem] leading-4', ink)}
+          className={cn(LABEL, ink)}
         >
           {tile.app.name}
         </Link>
@@ -332,43 +440,68 @@ function TileView({
     );
   }
 
-  const icon =
-    tile.kind === 'app'
-      ? { name: tile.app.name, to: `/miniapps/${tile.app.id}`, ...tile.app.icon }
-      : tile.key === 'store'
-        ? { name: 'Store', to: '/miniapps/store', ...STORE_ICON, color: undefined }
-        : { name: 'Wallpaper', to: '/miniapps/wallpaper', ...WALLPAPER_ICON, color: undefined };
-  return (
-    <Link
-      to={icon.to}
-      draggable={false}
-      onClick={(e) => editing && e.preventDefault()}
-      onKeyDown={onKeyDown}
-      aria-label={editing ? `${icon.name}, arrange with arrow keys` : undefined}
-      className="group flex flex-col items-center gap-1.5 rounded-md py-1 outline-offset-2"
+  // An icon or a folder: same size, same label.
+  const isFolder = tile.kind === 'folder';
+  const look = isFolder ? null : iconLookOf(tile as IconTile);
+  const name = isFolder ? tile.name : look!.name;
+  const onClick = (e: MouseEvent<HTMLAnchorElement | HTMLButtonElement>) => {
+    e.preventDefault();
+    const iconEl = e.currentTarget.querySelector<HTMLElement>('[data-icon]');
+    if (isFolder) onOpenFolder(tile.id, iconEl?.getBoundingClientRect() ?? null);
+    else if (!editing) onOpenIcon(look!.to, iconEl);
+  };
+  const picture = (
+    <span
+      className={cn(
+        'relative inline-flex transition-transform duration-150',
+        jiggle,
+        merging && 'scale-110',
+      )}
     >
-      <span className={cn('inline-flex', jiggle)}>
-        <MiniappIcon
-          glyph={icon.glyph}
-          background={icon.background}
-          color={icon.color}
-          lifted
-          className={cn(
-            'transition-transform duration-100',
-            !editing && 'group-active:scale-[0.92]',
-            lifted && '[filter:drop-shadow(0_10px_18px_rgb(0_0_0/0.4))]',
+      {isFolder ? (
+        <FolderIcon items={tile.items} tone={tone} />
+      ) : (
+        <>
+          {/* Held over an icon: a folder plate appears behind it. */}
+          {merging && (
+            <span className="absolute -inset-1.5 rounded-[1.4rem] bg-white/25 backdrop-blur-xl" />
           )}
-        />
-      </span>
-      <span
-        className={cn(
-          'max-w-full truncate px-1 text-[0.75rem] leading-4',
-          ink,
-          lifted && 'opacity-0',
-        )}
-      >
-        {icon.name}
-      </span>
+          <MiniappIcon
+            {...look!}
+            className={cn(
+              !editing && 'transition-transform duration-100 group-active:scale-[0.92]',
+            )}
+          />
+        </>
+      )}
+      {badge !== undefined && !lifted && <BadgeDot value={badge} />}
+    </span>
+  );
+  const label = <span className={cn(LABEL, ink, lifted && 'opacity-0')}>{name}</span>;
+  const cls = 'group flex w-full flex-col items-center gap-1.5 rounded-md py-1 outline-offset-2';
+
+  return isFolder ? (
+    <button
+      type="button"
+      onClick={onClick}
+      onKeyDown={onKeyDown}
+      aria-label={`${name} folder, ${tile.items.length} apps`}
+      className={cls}
+    >
+      {picture}
+      {label}
+    </button>
+  ) : (
+    <Link
+      to={look!.to}
+      draggable={false}
+      onClick={onClick}
+      onKeyDown={onKeyDown}
+      aria-label={editing ? `${name}, arrange with arrow keys` : undefined}
+      className={cls}
+    >
+      {picture}
+      {label}
     </Link>
   );
 }
@@ -432,11 +565,10 @@ function AddWidgetDialog({
           if (k !== CLOCK_KEY && !app) return null;
           const Widget = app?.Widget;
           const name = app ? app.name : 'Clock';
-          const ic = app ? app.icon : CLOCK_ICON;
           return (
             <section key={k}>
               <div className="flex items-center gap-3">
-                <MiniappIcon glyph={ic.glyph} background={ic.background} size="sm" />
+                <MiniappIcon {...(app ? app.icon : CLOCK_ICON)} size="sm" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-ink">{name}</p>
                   <p className="text-xs text-ink-faint">
