@@ -82,6 +82,14 @@ describe('miniapps', () => {
     expect(state.settings.layout).toEqual(['water', 'folder:fab', 'store']);
     expect(state.settings.folders).toEqual({ fab: { name: 'Health', apps: ['mood', 'teeth'] } });
     expect(state.settings.order).toEqual(['water', 'mood', 'teeth']);
+    // An icon in a folder never stays at the top level too.
+    state = (
+      await agent
+        .put('/api/miniapps/layout')
+        .send({ layout: ['teeth', 'water', 'folder:fab'] })
+        .expect(200)
+    ).body.state;
+    expect(state.settings.layout).toEqual(['water', 'folder:fab']);
     // Without folders, the saved ones stay.
     state = (
       await agent

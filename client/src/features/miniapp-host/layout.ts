@@ -69,12 +69,14 @@ export function screenTiles(state: MiniappState | undefined): Tile[] {
   const enabled = new Set(apps.map((a) => a.id));
   const folders = state?.settings.folders ?? {};
   const keys = state?.settings.layout ?? defaultKeys(apps);
-  const seen = new Set<string>();
+  // An icon in a folder on the screen is shown only there, wherever else its key appears.
+  const seen = new Set<string>(
+    keys.flatMap((k) => (k.startsWith('folder:') ? (folders[k.slice(7)]?.apps ?? []) : [])),
+  );
   const tiles: Tile[] = [];
   const add = (k: string) => {
     if (seen.has(k)) return;
     seen.add(k);
-    if (k.startsWith('folder:')) folders[k.slice(7)]?.apps.forEach((a) => seen.add(a));
     const t = tileOf(k, enabled, folders);
     if (t) tiles.push(t);
   };

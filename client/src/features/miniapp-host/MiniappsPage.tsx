@@ -6,6 +6,7 @@ import { PAGE_FRAME } from '../../components/shell/PageHeader';
 import { Dialog } from '../../components/ui/Dialog';
 import { useToast } from '../../context/ToastContext';
 import { errorMessage } from '../../lib/apiFetch';
+import { useHoldWork } from '../../lib/busy';
 import { cn } from '../../lib/cn';
 import { enabledApps, useMiniappState, useSetInstall, useSetLayout } from './api';
 import { sumBadges, useBadges, type Badge } from './badges';
@@ -60,6 +61,8 @@ export default function MiniappsPage() {
   const [editing, setEditing] = useState(false);
   const [adding, setAdding] = useState(false);
   const [open, setOpen] = useState<{ id: string; origin: DOMRect | null } | null>(null);
+  // While arranging, pulling down moves tiles; it never refreshes the page.
+  useHoldWork(editing);
 
   const apps = enabledApps(state.data);
   const tiles = screenTiles(state.data);
@@ -93,7 +96,8 @@ export default function MiniappsPage() {
     canMerge: (d, t) => isIconKey(d) && (isIconKey(t) || byKey.get(t)?.kind === 'folder'),
     onMerge: (d, t, order) => {
       const r = dropIntoFolder(order, folders, d, t);
-      save(r.keys, undefined, r.folders);
+      // Both icons leave the top level (they're in the folder now), not kept as hidden.
+      save(r.keys, t.startsWith('folder:') ? [d] : [d, t], r.folders);
     },
   });
 

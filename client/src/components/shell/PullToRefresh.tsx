@@ -117,6 +117,12 @@ export function PullToRefresh({ disabled }: { disabled?: boolean }) {
 
     const onMove = (e: TouchEvent) => {
       if (phase !== 'tracking' && phase !== 'pulling') return;
+      // Something took the gesture since it began (a held miniapp icon being dragged).
+      if (isHoldingWork()) {
+        if (phase === 'pulling') retract();
+        phase = 'idle';
+        return;
+      }
       if (e.touches.length !== 1) {
         if (phase === 'pulling') retract();
         phase = 'idle';

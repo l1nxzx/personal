@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
+import { holdWork } from '../../lib/busy';
 
 /**
  * Rearranging tiles by dragging, like a phone's home screen, without a library.
@@ -42,6 +43,7 @@ interface Press {
   height: number;
   timer?: ReturnType<typeof setTimeout>;
   active: boolean;
+  release?: () => void;
 }
 
 export function useDragReorder({
@@ -203,6 +205,8 @@ export function useDragReorder({
     const p = press.current;
     if (!p || p.active) return;
     p.active = true;
+    // A tile in hand: pull to refresh stands aside until it is dropped.
+    p.release = holdWork();
     navigator.vibrate?.(12);
     window.getSelection()?.removeAllRanges();
     cbs.current.onStart();
@@ -215,6 +219,7 @@ export function useDragReorder({
     press.current = null;
     if (!p) return;
     clearTimeout(p.timer);
+    p.release?.();
     if (scrollRaf.current) cancelAnimationFrame(scrollRaf.current);
     if (!p.active) return;
     setGhost(null);
