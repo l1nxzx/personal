@@ -95,25 +95,22 @@ export function Molar({ mood, className }: { mood: Mood; className?: string }) {
   );
 }
 
-/** The app icon's picture: a tooth outline (drawn in the icon's colour). */
-export function ToothGlyph({
-  className,
-  strokeWidth = 2,
-}: {
-  className?: string;
-  strokeWidth?: string | number;
-}) {
+/** The app icon's picture: a white tooth. */
+export function ToothGlyph({ className }: { className?: string; strokeWidth?: string | number }) {
+  // A filled tooth with a small shine, cut out in the icon's own colour.
   return (
-    <svg
-      viewBox="0 0 24 24"
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={strokeWidth}
-      strokeLinejoin="round"
-      strokeLinecap="round"
-    >
-      <path d="M7.5 3.5C5 3.5 3.6 5.6 4 8.4c.4 2.8 1.6 4 2 7 .3 2.6 1 4.6 2.2 4.6 1.3 0 1.4-3.4 2.1-5 .5-1 2.9-1 3.4 0 .7 1.6.8 5 2.1 5 1.2 0 1.9-2 2.2-4.6.4-3 1.6-4.2 2-7 .4-2.8-1-4.9-3.5-4.9-1.8 0-2.6.9-4.5.9s-2.7-.9-4.5-.9Z" />
+    <svg viewBox="0 0 24 24" className={className} fill="none">
+      <path
+        d="M7.5 3.5C5 3.5 3.6 5.6 4 8.4c.4 2.8 1.6 4 2 7 .3 2.6 1 4.6 2.2 4.6 1.3 0 1.4-3.4 2.1-5 .5-1 2.9-1 3.4 0 .7 1.6.8 5 2.1 5 1.2 0 1.9-2 2.2-4.6.4-3 1.6-4.2 2-7 .4-2.8-1-4.9-3.5-4.9-1.8 0-2.6.9-4.5.9s-2.7-.9-4.5-.9Z"
+        fill="currentColor"
+      />
+      <path
+        d="M7 7.6c.2-1 .9-1.7 1.9-1.8"
+        style={{ stroke: 'var(--icon-bg)' }}
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        opacity={0.75}
+      />
     </svg>
   );
 }

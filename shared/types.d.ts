@@ -1046,8 +1046,21 @@ export type MiniappWallpaper =
 
 export interface MiniappSettings {
   wallpaper: MiniappWallpaper;
-  /** Icon order on the miniapps screen (app ids). */
+  /** App order (app ids): the Store's and Home widgets' order. */
   order: string[];
+  /**
+   * The miniapps screen as arranged by hand: tiles in order. An app icon is its id, the two
+   * built-in icons are `store` and `wallpaper`, a widget is `widget:<app id>` (or `widget:clock`),
+   * a folder is `folder:<folder id>`. null until first arranged (the client then shows its default).
+   */
+  layout: string[] | null;
+  /** Folders on the miniapps screen, by id: a name and the icons inside (app ids, `store`...). */
+  folders: Record<string, MiniappFolder>;
+}
+
+export interface MiniappFolder {
+  name: string;
+  apps: string[];
 }
 
 /** One miniapp's place on this account (apps themselves live in client/miniapps/). */

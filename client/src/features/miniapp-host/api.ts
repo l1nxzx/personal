@@ -6,8 +6,9 @@ import type { MiniappDefinition } from './sdk/types';
 
 export const STATE_KEY = ['miniapps', 'state'] as const;
 
-export function useMiniappState() {
+export function useMiniappState(enabled = true) {
   return useQuery({
+    enabled,
     queryKey: STATE_KEY,
     queryFn: async () => (await apiFetch<{ state: MiniappState }>('/miniapps')).state,
     staleTime: 60_000,
@@ -69,4 +70,27 @@ export function useSetWallpaper() {
     onSuccess: ({ settings }) => apply(settings),
   });
   return { template, upload };
+}
+
+/** Saves the screen's arrangement (and folders, when given); the screen shows it at once. */
+export function useSetLayout() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { layout: string[]; folders?: MiniappSettings['folders'] }) =>
+      apiFetch<{ state: MiniappState }>('/miniapps/layout', { method: 'PUT', body: v }),
+    onMutate: async ({ layout, folders }) => {
+      await qc.cancelQueries({ queryKey: STATE_KEY });
+      const before = qc.getQueryData<MiniappState>(STATE_KEY);
+      qc.setQueryData<MiniappState>(STATE_KEY, (s) =>
+        s
+          ? { ...s, settings: { ...s.settings, layout, folders: folders ?? s.settings.folders } }
+          : s,
+      );
+      return { before };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.before) qc.setQueryData(STATE_KEY, ctx.before);
+    },
+    onSuccess: ({ state }) => qc.setQueryData(STATE_KEY, state),
+  });
 }

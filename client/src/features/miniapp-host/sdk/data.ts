@@ -125,6 +125,13 @@ function restorePending(qc: QueryClient, def: MiniappDefinition) {
   schedule(qc, def, 0);
 }
 
+/** The query an app's data lives in (the host reads it for badges). */
+export const appDataQuery = (def: MiniappDefinition) => ({
+  queryKey: keyOf(def.id),
+  queryFn: () => fetchData(def),
+  staleTime: 30_000,
+});
+
 export interface AppData<T> {
   /** The current data (the app's `initialData` until something is saved). */
   data: T;

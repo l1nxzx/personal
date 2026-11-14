@@ -251,6 +251,28 @@
     }
   }
 
+  /* Miniapps screen while arranging: tiles wobble gently, like a phone's. */
+  .tile-jiggle {
+    animation: tile-jiggle 0.32s ease-in-out infinite alternate;
+    transform-origin: 50% 55%;
+  }
+  .tile-jiggle-b {
+    animation-delay: -0.16s;
+  }
+  @keyframes tile-jiggle {
+    from {
+      transform: rotate(calc(-1 * var(--jiggle, 1.1deg)));
+    }
+    to {
+      transform: rotate(var(--jiggle, 1.1deg));
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tile-jiggle {
+      animation: none;
+    }
+  }
+
   /* Rendered Markdown (journal reading view, previews). */
   .prose-entry {
     @apply text-ink;

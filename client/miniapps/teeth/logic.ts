@@ -136,3 +136,28 @@ export function moodOf(s: Stats, now: Date): { mood: Mood; line: string } {
   const seed = Number(todayKey(now).replaceAll('-', '')) % lines.length;
   return { mood, line: lines[seed]! };
 }
+
+/**
+ * Brushes due by now and not logged, for the icon's badge: the morning one all day, the evening
+ * one from 18:00.
+ */
+export function dueNow(data: BrushData, now: Date): number {
+  const today = data.days[todayKey(now)] ?? {};
+  return (today.m ? 0 : 1) + (!today.e && hourOfDay(now) >= 15 ? 1 : 0);
+}
+
+/** When a brush logged later for a past day is filed: 08:00 or 21:00 that day. */
+export function pastTime(day: string, slot: Slot): string {
+  const [y, m, d] = day.split('-').map(Number);
+  return new Date(y!, m! - 1, d!, slot === 'm' ? 8 : 21).toISOString();
+}
+
+/** Brushes logged and possible in a set of days (up to today; days before the first log don't count). */
+export function tally(data: BrushData, days: string[], today: string, firstDay: string | null) {
+  const counted = days.filter((d) => d <= today && firstDay !== null && d >= firstDay);
+  const done = counted.reduce(
+    (n, d) => n + (data.days[d]?.m ? 1 : 0) + (data.days[d]?.e ? 1 : 0),
+    0,
+  );
+  return { done, possible: counted.length * 2 };
+}

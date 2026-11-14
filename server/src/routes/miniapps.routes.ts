@@ -51,6 +51,24 @@ miniappRoutes.put(
   }),
 );
 
+const tile = z.string().regex(/^(widget:|folder:)?[a-z][a-z0-9-]{1,39}$/, 'Not a tile');
+const folders = z
+  .record(
+    z.string().regex(/^[a-z][a-z0-9-]{1,39}$/),
+    z.object({ name: z.string().trim().max(40), apps: z.array(appId).max(60) }).strict(),
+  )
+  .refine((f) => Object.keys(f).length <= 60, 'Too many folders');
+miniappRoutes.put(
+  '/layout',
+  validate({
+    body: z.object({ layout: z.array(tile).max(300), folders: folders.optional() }).strict(),
+  }),
+  asyncHandler(async (req, res) => {
+    await service.setLayout(ctxOf(req), req.body.layout, req.body.folders);
+    res.json({ state: await service.getState(ctxOf(req)) });
+  }),
+);
+
 miniappRoutes.get(
   '/apps/:appId/data',
   validate({ params: appParams }),

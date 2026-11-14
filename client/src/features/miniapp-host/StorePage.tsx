@@ -65,7 +65,7 @@ function Row({ m, installed }: { m: MiniappDefinition; installed: boolean }) {
         to={`/miniapps/store/${m.id}`}
         className="-mx-2 flex min-w-0 flex-1 items-center gap-4 rounded px-2 py-1 hover:bg-surface/70 active:bg-surface"
       >
-        <MiniappIcon glyph={m.icon.glyph} background={m.icon.background} color={m.icon.color} />
+        <MiniappIcon {...m.icon} />
         <div className="min-w-0 flex-1">
           <p className="font-medium text-ink">{m.name}</p>
           <p className="line-clamp-2 text-sm text-ink-muted">{m.description}</p>

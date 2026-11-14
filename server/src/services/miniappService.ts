@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type {
   MiniappData,
+  MiniappFolder,
   MiniappInstall,
   MiniappSettings,
   MiniappState,
@@ -27,7 +28,12 @@ export async function getState(ctx: Ctx): Promise<MiniappState> {
     repo.listApps(ctx.userId),
   ]);
   return {
-    settings: { wallpaper: settings.wallpaper ?? DEFAULT_WALLPAPER, order: settings.order ?? [] },
+    settings: {
+      wallpaper: settings.wallpaper ?? DEFAULT_WALLPAPER,
+      order: settings.order ?? [],
+      layout: settings.layout ?? null,
+      folders: settings.folders ?? {},
+    },
     apps: Object.fromEntries(
       apps.map((a): [string, MiniappInstall] => [
         a.id,
@@ -58,6 +64,42 @@ export async function setInstall(
 
 export async function setOrder(ctx: Ctx, order: string[]): Promise<void> {
   await repo.setSettings(ctx.userId, { order: [...new Set(order)] });
+  notifyChange(ctx, 'miniapp');
+}
+
+/**
+ * The miniapps screen's arrangement (icons, widgets, folders). The app ids in it, in that order
+ * (apps in a folder at the folder's place), become the app order too. Without `folders`, the
+ * saved folders stay; either way, folders no longer on the screen are dropped.
+ */
+export async function setLayout(
+  ctx: Ctx,
+  layout: string[],
+  nextFolders?: Record<string, MiniappFolder>,
+): Promise<void> {
+  const tiles = [...new Set(layout)];
+  const settings = await repo.getSettings(ctx.userId);
+  const all = nextFolders ?? settings.folders ?? {};
+  const folders: Record<string, MiniappFolder> = {};
+  for (const t of tiles) {
+    const id = t.startsWith('folder:') ? t.slice(7) : null;
+    const f = id ? all[id] : undefined;
+    if (id && f) folders[id] = { name: f.name, apps: [...new Set(f.apps)] };
+  }
+  const placed = tiles
+    .filter((t) => !t.startsWith('folder:') || folders[t.slice(7)])
+    .flatMap((t) => (t.startsWith('folder:') ? folders[t.slice(7)]!.apps : [t]))
+    .filter((t) => !t.startsWith('widget:'));
+  const known = settings.order ?? [];
+  const order = [
+    ...placed.filter((id) => known.includes(id)),
+    ...known.filter((id) => !placed.includes(id)),
+  ];
+  await repo.setSettings(ctx.userId, {
+    layout: tiles.filter((t) => !t.startsWith('folder:') || folders[t.slice(7)]),
+    order,
+    folders,
+  });
   notifyChange(ctx, 'miniapp');
 }
 

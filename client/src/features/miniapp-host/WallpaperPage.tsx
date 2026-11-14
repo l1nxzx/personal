@@ -8,6 +8,7 @@ import { useMiniappState, useSetWallpaper } from './api';
 import { WALLPAPER_ICON } from './builtins';
 import { MiniappFrame } from './Frame';
 import { MiniappIcon } from './MiniappIcon';
+import { usePictureTone } from './pictureTone';
 import { WALLPAPERS, wallpaperStyle } from './wallpapers';
 
 /** The miniapps screen's background: the site's colours, a quiet solid, or a picture. */
@@ -17,6 +18,7 @@ export default function WallpaperPage() {
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const current = state.data?.settings.wallpaper;
+  const tone = usePictureTone(current);
   const busy = template.isPending || upload.isPending;
   const onError = (err: unknown) => toast({ message: errorMessage(err), tone: 'error' });
   // An old or unknown template shows as Plain, which is what the screen falls back to.
@@ -71,7 +73,7 @@ export default function WallpaperPage() {
               )}
               style={
                 current?.kind === 'image'
-                  ? { background: wallpaperStyle(current).background }
+                  ? { background: wallpaperStyle(current, tone).background }
                   : undefined
               }
             >
