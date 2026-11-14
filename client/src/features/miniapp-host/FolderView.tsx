@@ -52,26 +52,88 @@ export function FolderView({
   const hold = useRef<number>();
   useEffect(() => setTitle(name), [name]);
 
-  useLayoutEffect(() => {
+  const backdrop = useRef<HTMLDivElement>(null);
+  const header = useRef<HTMLDivElement>(null);
+  const closing = useRef(false);
+  const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /** Where the panel starts and ends: shrunk onto the folder's icon. */
+  const fromOrigin = () => {
     const el = panel.current;
-    if (!el || !origin || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!el || !origin) return null;
     const r = el.getBoundingClientRect();
     const dx = origin.left + origin.width / 2 - (r.left + r.width / 2);
     const dy = origin.top + origin.height / 2 - (r.top + r.height / 2);
-    el.animate(
+    return `translate(${dx}px, ${dy}px) scale(${origin.width / r.width}, ${origin.height / r.height})`;
+  };
+
+  // Opening: the blur fades in while the panel grows out of the folder icon, then the icons
+  // and the name settle in. Only transform and opacity animate, so it stays smooth.
+  useLayoutEffect(() => {
+    if (reduced()) return;
+    const ease = 'cubic-bezier(0.32, 0.72, 0, 1)';
+    backdrop.current?.animate([{ opacity: 0 }, { opacity: 1 }], {
+      duration: 280,
+      easing: 'ease-out',
+    });
+    const from = fromOrigin();
+    if (from)
+      panel.current!.animate(
+        [
+          { transform: from, borderRadius: '30%', opacity: 0.6 },
+          { transform: 'none', borderRadius: '2rem', opacity: 1 },
+        ],
+        { duration: 420, easing: ease },
+      );
+    panel.current?.querySelectorAll<HTMLElement>('[data-folder-item]').forEach((el, i) =>
+      el.animate(
+        [
+          { opacity: 0, transform: 'scale(0.85)' },
+          { opacity: 1, transform: 'none' },
+        ],
+        { duration: 260, delay: 90 + i * 18, easing: ease, fill: 'backwards' },
+      ),
+    );
+    header.current?.animate(
       [
-        { transform: `translate(${dx}px, ${dy}px) scale(${origin.width / r.width})`, opacity: 0.4 },
-        { transform: 'none', opacity: 1 },
+        { opacity: 0, transform: 'translateY(8px)' },
+        { opacity: 1, transform: 'none' },
       ],
-      { duration: 280, easing: 'cubic-bezier(0.2, 0.85, 0.25, 1)' },
+      { duration: 260, delay: 120, easing: ease, fill: 'backwards' },
     );
     // Only on opening.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /** Closing runs the opening backwards, into the folder icon. */
+  const close = () => {
+    if (closing.current) return;
+    closing.current = true;
+    const from = fromOrigin();
+    if (reduced() || !from) return onClose();
+    const opts = {
+      duration: 240,
+      easing: 'cubic-bezier(0.4, 0, 0.8, 0.4)',
+      fill: 'forwards' as const,
+    };
+    header.current?.animate([{ opacity: 1 }, { opacity: 0 }], { ...opts, duration: 120 });
+    backdrop.current?.animate([{ opacity: 1 }, { opacity: 0 }], opts);
+    const a = panel.current!.animate(
+      [
+        { transform: 'none', opacity: 1 },
+        { transform: from, opacity: 0 },
+      ],
+      opts,
+    );
+    a.onfinish = onClose;
+    setTimeout(onClose, 400);
+  };
+  const closeRef = useRef(close);
+  closeRef.current = close;
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') closeRef.current();
     };
     window.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
@@ -80,7 +142,7 @@ export function FolderView({
       window.removeEventListener('keydown', onKey);
       document.body.style.overflow = prev;
     };
-  }, [onClose]);
+  }, []);
 
   const commitTitle = () => {
     const t = title.trim() || 'Folder';
@@ -90,14 +152,19 @@ export function FolderView({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-40 bg-black/20 backdrop-blur-2xl backdrop-saturate-150"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      className="fixed inset-0 z-40"
+      onClick={(e) => (e.target as HTMLElement).dataset.closes && close()}
       role="dialog"
       aria-modal="true"
       aria-label={`${name} folder`}
     >
-      <div className="mx-auto mt-[18vh] w-[min(100%-2rem,22rem)]">
-        <div className="mb-4 flex items-center gap-2 px-1">
+      <div
+        ref={backdrop}
+        data-closes="1"
+        className="absolute inset-0 bg-black/20 backdrop-blur-2xl backdrop-saturate-150"
+      />
+      <div className="relative mx-auto mt-[18vh] w-[min(100%-2rem,22rem)]">
+        <div ref={header} className="mb-4 flex items-center gap-2 px-1">
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -125,14 +192,14 @@ export function FolderView({
         <div
           ref={panel}
           className={cn(
-            'grid grid-cols-3 gap-x-2 gap-y-5 rounded-[2rem] px-3 py-6 ring-1 ring-inset backdrop-blur-2xl',
+            'grid grid-cols-3 gap-x-2 gap-y-5 rounded-[2rem] px-3 py-6 ring-1 ring-inset [will-change:transform]',
             PANEL[tone],
           )}
         >
           {items.map((t, i) => {
             const look = iconLookOf(t);
             return (
-              <div key={t.key} className="relative">
+              <div key={t.key} data-folder-item className="relative">
                 <button
                   type="button"
                   onClick={(e) => {

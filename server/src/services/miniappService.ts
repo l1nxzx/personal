@@ -86,7 +86,9 @@ export async function setLayout(
     const f = id ? all[id] : undefined;
     if (id && f) folders[id] = { name: f.name, apps: [...new Set(f.apps)] };
   }
-  const placed = tiles
+  const inFolders = new Set(Object.values(folders).flatMap((f) => f.apps));
+  const top = tiles.filter((t) => !inFolders.has(t));
+  const placed = top
     .filter((t) => !t.startsWith('folder:') || folders[t.slice(7)])
     .flatMap((t) => (t.startsWith('folder:') ? folders[t.slice(7)]!.apps : [t]))
     .filter((t) => !t.startsWith('widget:'));
@@ -96,7 +98,7 @@ export async function setLayout(
     ...known.filter((id) => !placed.includes(id)),
   ];
   await repo.setSettings(ctx.userId, {
-    layout: tiles.filter((t) => !t.startsWith('folder:') || folders[t.slice(7)]),
+    layout: top.filter((t) => !t.startsWith('folder:') || folders[t.slice(7)]),
     order,
     folders,
   });
