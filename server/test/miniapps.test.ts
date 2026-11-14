@@ -19,7 +19,7 @@ describe('miniapps', () => {
     const { agent } = await signedUpAgent();
     const state = (await agent.get('/api/miniapps').expect(200)).body.state;
     expect(state).toEqual({
-      settings: { wallpaper: { kind: 'template', id: 'plain' }, order: [] },
+      settings: { wallpaper: { kind: 'template', id: 'plain' }, order: [], layout: null },
       apps: {},
     });
   });
@@ -44,6 +44,20 @@ describe('miniapps', () => {
     expect((await agent.get('/api/miniapps/apps/teeth/data').expect(200)).body.data).toEqual({
       n: 1,
     });
+  });
+
+  it('saves the screen layout, and orders apps by it', async () => {
+    const { agent } = await signedUpAgent();
+    await agent.put('/api/miniapps/apps/teeth').send({ enabled: true }).expect(200);
+    await agent.put('/api/miniapps/apps/water').send({ enabled: true }).expect(200);
+    const layout = ['widget:clock', 'water', 'store', 'widget:teeth', 'teeth', 'wallpaper'];
+    const state = (await agent.put('/api/miniapps/layout').send({ layout }).expect(200)).body.state;
+    expect(state.settings.layout).toEqual(layout);
+    expect(state.settings.order).toEqual(['water', 'teeth']);
+    await agent
+      .put('/api/miniapps/layout')
+      .send({ layout: ['widget:Bad'] })
+      .expect(400);
   });
 
   it('stores any JSON per app with a revision check, and deletes it on request', async () => {

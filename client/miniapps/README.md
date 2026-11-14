@@ -17,10 +17,14 @@ change.
   The site never imports a miniapp either.
 - No server code, no new pages, no changes to `client/src`. Data, routes, the Store, icons and
   widgets come from the framework.
-- Look like the rest of the site, not like a generated app: the site's colour tokens, its type
-  (serif for big numbers and titles, sans for the rest), small radii, hairlines rather than boxes,
-  no gradients, glows or glossy effects. The icon is one solid, muted colour with a plain line
-  glyph (a lucide icon, white).
+- Inside, look like the rest of the site, not like a generated app: the site's colour tokens, its
+  type (serif for big numbers and titles, sans for the rest), small radii, hairlines rather than
+  boxes, no gradients, glows or glossy effects.
+- The icon: choose one muted colour and a white glyph. The framework draws the rest (the squircle,
+  its soft shading, light and edge), so every icon on the screen matches; don't add effects
+  yourself. A lucide icon works; a custom glyph looks more finished as a filled white shape, with
+  cut-outs drawn in `var(--icon-bg)` (the icon's colour), like the built-in Store and Wallpaper
+  icons (`src/features/miniapp-host/builtins.tsx`) and Brush's tooth.
 - Keep it simple and small. Style with Tailwind classes and the site's colour tokens (`bg-surface`,
   `border-line`, `text-ink`, `text-ink-muted`, `text-ink-faint`, `text-accent`, `bg-ok/10`,
   `text-bad`…), so it works in dark and light mode. An app may have its own accent colours.
@@ -55,7 +59,7 @@ export default defineMiniapp<WaterData>({
   about: ['A tap per glass.', 'Your days at a glance.'], // optional: points for its Store page
   icon: {
     glyph: Droplet, // a lucide icon, or an SVG component ({ className, strokeWidth })
-    background: '#3d6a8c', // one solid, muted colour
+    background: '#3d6a8c', // one muted colour; the framework shades it
     // color: '#fff',       // glyph colour, default white
   },
   App: lazy(() => import('./App')),
@@ -69,7 +73,8 @@ export default defineMiniapp<WaterData>({
 
 A default-exported component. It is shown under a header with the app's icon and name and a way
 back; render only the content. `Widget.tsx` is the same, but small: one or two lines and at most a
-couple of buttons. It is shown in a card on Home.
+couple of buttons. It is shown in a card on Home (when "Widget on Home" is on) and, when added
+with "+ Widget", in a frosted card on the miniapps screen: keep it readable on `bg-surface`.
 
 ```tsx
 import { Button, dayKey, useAppData, useNow } from '@miniapp/sdk';

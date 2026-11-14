@@ -18,7 +18,7 @@ export interface MiniappDefinition<T = unknown> {
   icon: {
     /** The picture on the icon: an SVG component (a lucide icon works) drawn in `color`. */
     glyph: Glyph;
-    /** Icon background: one solid, muted colour (e.g. '#3f7a72'). No gradients. */
+    /** Icon colour: one muted colour (e.g. '#3f7a72'); the host adds the shading. */
     background: string;
     /** Colour of the glyph. Default white. */
     color?: string;

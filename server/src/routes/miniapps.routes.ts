@@ -51,6 +51,16 @@ miniappRoutes.put(
   }),
 );
 
+const tile = z.string().regex(/^(widget:)?[a-z][a-z0-9-]{1,39}$/, 'Not a tile');
+miniappRoutes.put(
+  '/layout',
+  validate({ body: z.object({ layout: z.array(tile).max(300) }).strict() }),
+  asyncHandler(async (req, res) => {
+    await service.setLayout(ctxOf(req), req.body.layout);
+    res.json({ state: await service.getState(ctxOf(req)) });
+  }),
+);
+
 miniappRoutes.get(
   '/apps/:appId/data',
   validate({ params: appParams }),

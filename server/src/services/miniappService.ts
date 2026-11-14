@@ -27,7 +27,11 @@ export async function getState(ctx: Ctx): Promise<MiniappState> {
     repo.listApps(ctx.userId),
   ]);
   return {
-    settings: { wallpaper: settings.wallpaper ?? DEFAULT_WALLPAPER, order: settings.order ?? [] },
+    settings: {
+      wallpaper: settings.wallpaper ?? DEFAULT_WALLPAPER,
+      order: settings.order ?? [],
+      layout: settings.layout ?? null,
+    },
     apps: Object.fromEntries(
       apps.map((a): [string, MiniappInstall] => [
         a.id,
@@ -58,6 +62,23 @@ export async function setInstall(
 
 export async function setOrder(ctx: Ctx, order: string[]): Promise<void> {
   await repo.setSettings(ctx.userId, { order: [...new Set(order)] });
+  notifyChange(ctx, 'miniapp');
+}
+
+/**
+ * The miniapps screen's arrangement (icons and widgets). The app ids in it, in that order,
+ * become the app order too.
+ */
+export async function setLayout(ctx: Ctx, layout: string[]): Promise<void> {
+  const tiles = [...new Set(layout)];
+  const settings = await repo.getSettings(ctx.userId);
+  const placed = tiles.filter((t) => !t.startsWith('widget:'));
+  const known = settings.order ?? [];
+  const order = [
+    ...placed.filter((id) => known.includes(id)),
+    ...known.filter((id) => !placed.includes(id)),
+  ];
+  await repo.setSettings(ctx.userId, { layout: tiles, order });
   notifyChange(ctx, 'miniapp');
 }
 
