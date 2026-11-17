@@ -30,7 +30,7 @@ Single server test file: `npm --prefix server test -- test/tasks.test.ts` (verif
 
 ## Environment variables (`server/src/config/env.ts`)
 
-`NODE_ENV`, `PORT` (4000), `CLIENT_ORIGIN` (comma list allowed; must match the site exactly for cookies/CORS), `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `ACCESS_TOKEN_TTL_SECONDS` (600), `REFRESH_TOKEN_TTL_SECONDS` (14 days), `COOKIE_SAMESITE` (`lax`), `ALLOW_REGISTRATION` (`false`), `FIREBASE_SERVICE_ACCOUNT_PATH` (`./serviceAccountKey.json`), `FIREBASE_STORAGE_BUCKET`, `REDIS_URL` (optional; required for >1 instance), `LOG_LEVEL`. Client: optional `VITE_API_URL` (default `/api`).
+`NODE_ENV`, `PORT` (4000), `CLIENT_ORIGIN` (comma list allowed; must match the site exactly for cookies/CORS), `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `ACCESS_TOKEN_TTL_SECONDS` (600), `REFRESH_TOKEN_TTL_SECONDS` (14 days), `COOKIE_SAMESITE` (`lax`), `ALLOW_REGISTRATION` (`false`), `FIREBASE_SERVICE_ACCOUNT_PATH` (`./serviceAccountKey.json`), `FIREBASE_STORAGE_BUCKET`, `REDIS_URL` (optional; required for >1 instance), `LOG_LEVEL`. Client: optional `VITE_API_URL` (default `https://personal-2-phi0.onrender.com/api`; set `/api` for the local Vite proxy).
 
 Secrets (JWT secrets, service account key) live only in `server/.env`, the key file, and the Render dashboard. Never paste values into docs or commits.
 
