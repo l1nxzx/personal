@@ -1,7 +1,10 @@
 import type { ApiErrorBody } from '../../../shared/types';
 import { today } from './dates';
 
-export const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api';
+/** Backend on Render. VITE_API_URL overrides it (e.g. "/api" to use the Vite dev proxy). */
+export const API_BASE =
+  (import.meta.env.VITE_API_URL as string | undefined) ??
+  'https://personal-2-phi0.onrender.com/api';
 
 /** Identifies this tab so it can ignore realtime echoes of its own changes. */
 export const CLIENT_ID = Math.random().toString(36).slice(2, 12);
